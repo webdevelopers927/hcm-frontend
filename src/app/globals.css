@@ -1,26 +1,186 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Every color in the UI resolves to one of these, so a
+ * rebrand or a new theme is a single-file change.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: #f4f3ee;
+  --surface: #ffffff;
+  --surface-2: #f9f8f4;
+  --surface-3: #eeede6;
+  --line: #e4e2d9;
+  --line-strong: #d3d0c4;
+  --ink: #15171c;
+  --ink-2: #474a52;
+  --ink-3: #7c7f87;
+  --ink-inverse: #f7f7f2;
+
+  --brand: #15171c;
+  --brand-ink: #f7f7f2;
+  --accent: #c8f169;
+  --accent-ink: #15171c;
+  --accent-soft: #eef9d2;
+
+  --ok: #1f8a5b;
+  --ok-soft: #e1f3ea;
+  --warn: #b8730a;
+  --warn-soft: #fcf0d9;
+  --bad: #c43d3d;
+  --bad-soft: #fbe5e3;
+  --info: #3b5bdb;
+  --info-soft: #e5eafc;
+  --violet: #7048e8;
+  --violet-soft: #ede7fd;
+
+  --shadow-sm: 0 1px 2px rgb(21 23 28 / 0.04), 0 1px 1px rgb(21 23 28 / 0.03);
+  --shadow-md: 0 8px 24px -8px rgb(21 23 28 / 0.12), 0 2px 6px rgb(21 23 28 / 0.04);
+  --shadow-lg: 0 24px 60px -16px rgb(21 23 28 / 0.25);
+}
+
+.dark {
+  --canvas: #0e0f12;
+  --surface: #16181d;
+  --surface-2: #1b1d23;
+  --surface-3: #23262d;
+  --line: #2a2d35;
+  --line-strong: #3a3e48;
+  --ink: #f2f2ee;
+  --ink-2: #b7b9bf;
+  --ink-3: #80838c;
+  --ink-inverse: #15171c;
+
+  --brand: #c8f169;
+  --brand-ink: #15171c;
+  --accent: #c8f169;
+  --accent-ink: #15171c;
+  --accent-soft: #283214;
+
+  --ok: #4cc38a;
+  --ok-soft: #13291f;
+  --warn: #f0a33a;
+  --warn-soft: #2e2311;
+  --bad: #f07373;
+  --bad-soft: #321718;
+  --info: #7c97f5;
+  --info-soft: #182040;
+  --violet: #a58cf6;
+  --violet-soft: #241b3d;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 8px 24px -8px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 24px 60px -16px rgb(0 0 0 / 0.7);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+
+  --shadow-soft: var(--shadow-sm);
+  --shadow-float: var(--shadow-md);
+  --shadow-pop: var(--shadow-lg);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display-serif);
+
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade: fade 0.2s ease-out both;
+  --animate-slide-in: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-slide-up: slide-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-flash: flash 1.6s ease-out both;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* "Here it is": a soft accent halo around a field you jumped to. */
+@keyframes flash {
+  0%, 30% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 70%, transparent); }
+  100% { box-shadow: 0 0 0 6px transparent; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-in {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Thin, quiet scrollbars that match the canvas. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
