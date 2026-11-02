@@ -35,6 +35,9 @@ const COLUMN_LABELS: Record<string, string> = {
   duty_type: "Duty type",
   has_team_authority: "Team authority",
   join_date: "Join date",
+  resigned_date: "Resigned date",
+  last_working_day: "Last working day",
+  reason_for_resignation: "Reason for resignation",
 };
 const columnLabel = (c: string) => COLUMN_LABELS[c] ?? c.replace(/_/g, " ").replace(/^\w/, (x) => x.toUpperCase());
 
@@ -248,8 +251,9 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   <li><code className="rounded bg-surface-3 px-1 text-[12px]">reports_to</code> is an existing employee code (EMP-0001) or email, or the email of another row in the same file. That person must have team authority.</li>
                   <li><code className="rounded bg-surface-3 px-1 text-[12px]">has_team_authority</code> is optional: yes or no.</li>
                   <li>Phone numbers must be in international format, e.g. <span className="tabular">+92 300 1234567</span>.</li>
+                  <li>Optional <code className="rounded bg-surface-3 px-1 text-[12px]">resigned_date</code>, <code className="rounded bg-surface-3 px-1 text-[12px]">last_working_day</code> and <code className="rounded bg-surface-3 px-1 text-[12px]">reason_for_resignation</code> columns are <strong className="text-ink">required</strong> on rows whose status is a notice-period status. The last working day can&apos;t be before the resigned date.</li>
                   <li>Dates are <code className="rounded bg-surface-3 px-1 text-[12px]">YYYY-MM-DD</code>.</li>
-                  <li>Status: active, probation, on leave, notice period, inactive. Duty type: full time, part time, contract, freelance, internship, temporary, consultant. Work mode: onsite, hybrid, remote.</li>
+                  <li><code className="rounded bg-surface-3 px-1 text-[12px]">status</code> is an employment status <strong className="text-ink">name</strong> from Setup (e.g. “Active”, “On leave”), not case-sensitive. Duty type: full time, part time, contract, freelance, internship, temporary, consultant. Work mode: onsite, hybrid, remote.</li>
                   <li>If any row has an error, <strong className="text-ink">nothing is imported</strong>. Every imported employee receives an invitation email.</li>
                 </ul>
               </div>

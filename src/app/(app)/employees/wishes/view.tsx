@@ -2,8 +2,9 @@
 
 import { Cake, Heart, PartyPopper, Send, Sparkles, TrendingUp } from "lucide-react";
 import { useState } from "react";
-import { ModuleHeader, Segments, StatStrip, selectCls } from "@/components/employees/module-kit";
+import { ModuleHeader, Segments, StatStrip } from "@/components/employees/module-kit";
 import { Avatar, Badge, Button, Card, CardHeader } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
 import { currentUser, employees, upcomingCelebrations } from "@/lib/data";
 import { wishes as seed, type Wish } from "@/lib/module-data";
@@ -136,13 +137,8 @@ function Composer({ onSend }: { onSend: (w: Wish) => void }) {
             className="w-full resize-none bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-3"
           />
           <div className="flex flex-col gap-2 sm:flex-row">
-            <select aria-label="Recipient" className={cn(selectCls, "h-10 sm:flex-1")} value={to} onChange={(e) => setTo(e.target.value)}>
-              <option value="">To…</option>
-              {employees.filter((e) => e.id !== currentUser.id).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-            <select aria-label="Occasion" className={cn(selectCls, "h-10 sm:w-48")} value={event} onChange={(e) => setEvent(e.target.value as Wish["event"])}>
-              {Object.keys(eventMeta).map((k) => <option key={k}>{k}</option>)}
-            </select>
+            <Select aria-label="Recipient" size="sm" className="sm:flex-1" value={to} onChange={setTo} placeholder="To…" options={employees.filter((e) => e.id !== currentUser.id).map((e) => ({ value: e.id, label: e.name }))} />
+            <Select aria-label="Occasion" size="sm" className="sm:w-48" value={event} onChange={(v) => setEvent(v as Wish["event"])} options={Object.keys(eventMeta).map((k) => ({ value: k, label: k }))} />
             <Button
               variant="primary"
               disabled={!recipient || !msg.trim()}

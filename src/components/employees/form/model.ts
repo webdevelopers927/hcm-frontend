@@ -39,9 +39,9 @@ const STR_KEYS = [
   "salutation", "first_name", "middle_name", "last_name", "pseudo_name", "father_husband_name", "gender", "birth_date",
   "cnic", "cnic_expiry", "personal_email", "marital_status", "religion", "blood_group",
   // positional
-  "division_id", "email", "department_id", "designation_id", "status", "shift_id", "duty_type", "work_mode", "campaign_id",
+  "division_id", "email", "department_id", "designation_id", "employment_status_id", "shift_id", "duty_type", "work_mode", "campaign_id",
   "location_id", "machine_uid", "probation_start_date", "probation_duration_id", "confirmation_date", "join_date",
-  "separation_date", "remote_access_from", "remote_access_until",
+  "separation_date", "resigned_date", "last_working_day", "reason_for_resignation", "remote_access_from", "remote_access_until",
   // contact
   "phone", "secondary_phone", "landline", "permanent_address", "present_address", "emergency_contact_name",
   "emergency_contact_phone", "emergency_contact_relation",
@@ -50,7 +50,7 @@ const STR_KEYS = [
 ] as const;
 export type StrKey = (typeof STR_KEYS)[number];
 
-const ID_KEYS = new Set<StrKey>(["division_id", "department_id", "designation_id", "shift_id", "campaign_id", "location_id", "probation_duration_id"]);
+const ID_KEYS = new Set<StrKey>(["division_id", "department_id", "designation_id", "employment_status_id", "shift_id", "campaign_id", "location_id", "probation_duration_id"]);
 /** National ids: the form only ever holds a *new* value; blank keeps what's stored. */
 export const SECRET_KEYS = ["cnic", "passport_no", "driving_license_no"] as const;
 export type SecretKey = (typeof SECRET_KEYS)[number];
@@ -114,8 +114,8 @@ export type FormKey = keyof FormState;
 export const SECTION_KEYS: Record<SectionId, FormKey[]> = {
   personal: ["avatar", "salutation", "first_name", "middle_name", "last_name", "pseudo_name", "father_husband_name", "gender", "birth_date", "cnic", "cnic_expiry", "personal_email", "country", "state", "city", "nationality", "marital_status", "religion", "blood_group"],
   positional: [
-    "division_id", "email", "department_id", "designation_id", "status", "shift_id", "duty_type", "work_mode", "campaign_id", "location_id",
-    "machine_uid", "probation_start_date", "probation_duration_id", "confirmation_date", "join_date", "separation_date", "reports_to",
+    "division_id", "email", "department_id", "designation_id", "employment_status_id", "shift_id", "duty_type", "work_mode", "campaign_id", "location_id",
+    "machine_uid", "probation_start_date", "probation_duration_id", "confirmation_date", "join_date", "separation_date", "resigned_date", "last_working_day", "reason_for_resignation", "reports_to",
     "indirect_reports_to", "has_team_authority", "remote_access", "permanent_remote_access", "remote_access_from", "remote_access_until",
   ],
   contact: ["phone", "secondary_phone", "landline", "permanent_address", "present_address", "emergency_contact_name", "emergency_contact_phone", "emergency_contact_relation"],
@@ -332,10 +332,10 @@ const TOP_LABELS: Record<string, string> = {
   pseudo_name: "Pseudo name", father_husband_name: "Father / husband name", gender: "Gender", birth_date: "Date of birth", cnic: "CNIC",
   cnic_expiry: "CNIC expiry", personal_email: "Personal email", country_id: "Country", state_id: "State / province", city_id: "City",
   nationality_id: "Nationality", marital_status: "Marital status", religion: "Religion", blood_group: "Blood group",
-  division_id: "Division", email: "Business email", department_id: "Department", designation_id: "Designation", status: "Employment status",
+  division_id: "Division", email: "Business email", department_id: "Department", designation_id: "Designation", employment_status_id: "Employment status",
   shift_id: "Shift", duty_type: "Duty type", work_mode: "Work mode", campaign_id: "Campaign", location_id: "Location", machine_uid: "Machine UID",
   probation_start_date: "Probation start", probation_duration_id: "Probation duration", confirmation_date: "Confirmation date",
-  join_date: "Date of joining", separation_date: "Separation date", reports_to_id: "Reporting authority",
+  join_date: "Date of joining", separation_date: "Separation date", resigned_date: "Resigned date", last_working_day: "Last working day", reason_for_resignation: "Reason for resignation", reports_to_id: "Reporting authority",
   indirect_reports_to_id: "Indirect reporting authority", has_team_authority: "Team authority", remote_access: "Remote access",
   permanent_remote_access: "Permanent remote access", remote_access_from: "Remote access from", remote_access_until: "Remote access till",
   phone: "Primary contact number", secondary_phone: "Secondary number", landline: "Landline", permanent_address: "Permanent address",
@@ -387,7 +387,7 @@ export const fieldId = (key: string) => `ef-${key.replace(/\./g, "-")}`;
 
 /* ---------- completeness ---------- */
 
-export const REQUIRED = new Set(["first_name", "last_name", "email", "cnic", "department_id", "designation_id", "status", "duty_type", "join_date"]);
+export const REQUIRED = new Set(["first_name", "last_name", "email", "cnic", "department_id", "designation_id", "employment_status_id", "duty_type", "join_date"]);
 
 const EXP_REQUIRED: (keyof ExpRow | "country_id" | "state_id" | "city_id" | "experience_letter")[] = [
   "company_name", "designation", "last_salary", "country_id", "state_id", "city_id", "period_from", "period_to",
@@ -400,7 +400,10 @@ export type Completeness = { missing: Record<string, string>; total: number };
  * What still blocks "Submit", computed live from the form (so it updates as you
  * type) and topped up with any extra keys the server reported.
  */
-export function completeness(s: FormState, detail: EmployeeDetail | null): Completeness {
+/** The exit fields are needed only while the chosen status is a notice-period one. */
+export const EXIT_FIELDS = ["resigned_date", "last_working_day", "reason_for_resignation"] as const;
+
+export function completeness(s: FormState, detail: EmployeeDetail | null, noticeStatusIds: ReadonlySet<number> = new Set()): Completeness {
   const missing: Record<string, string> = {};
   let total = 0;
   const check = (key: string, filled: boolean, message?: string) => {
@@ -412,6 +415,9 @@ export function completeness(s: FormState, detail: EmployeeDetail | null): Compl
   for (const k of REQUIRED) {
     if (k === "cnic") check(k, has(s.cnic) || !!detail?.cnic_masked);
     else check(k, has(s[k as StrKey]));
+  }
+  if (s.employment_status_id && noticeStatusIds.has(Number(s.employment_status_id))) {
+    for (const k of EXIT_FIELDS) check(k, has(s[k]));
   }
   if (s.remote_access) {
     check("remote_access_from", has(s.remote_access_from));
@@ -459,4 +465,11 @@ export function mapErrors(errors: Record<string, string[]>): Record<string, stri
 export function firstSectionWith(keys: string[]): SectionId | null {
   for (const s of SECTIONS) if (keys.some((k) => sectionOf(k) === s.id)) return s.id;
   return null;
+}
+
+/** Checks the server would reject, shown inline before saving. */
+export function clientErrors(s: FormState): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (s.resigned_date && s.last_working_day && s.last_working_day < s.resigned_date) out.last_working_day = "Can't be before the resigned date";
+  return out;
 }

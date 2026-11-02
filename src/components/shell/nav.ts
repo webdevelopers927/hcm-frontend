@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   BarChart3,
+  BadgeInfo,
   Briefcase,
   CalendarDays,
   Clock3,
@@ -78,6 +79,7 @@ export const EMPLOYEE_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Setup",
     items: [
       { label: "Divisions", href: "/employees/divisions", icon: Layers, ready: true },
+      { label: "Employment statuses", href: "/employees/employment-statuses", icon: BadgeInfo, ready: true },
       { label: "Degree programs", href: "/employees/degree-programs", icon: GraduationCap, ready: true },
     ],
   },

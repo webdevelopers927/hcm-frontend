@@ -1,20 +1,14 @@
-import type { EmployeeFilters, EmployeeStatus, ShiftRef, WorkMode } from "./types";
+import type { EmploymentStatusRef, EmployeeFilters, ShiftRef, WorkMode } from "./types";
 
 /* Display helpers for API values. Labels from /employees/filters win when loaded. */
 
-export const STATUS_ORDER: EmployeeStatus[] = ["active", "probation", "on_leave", "notice_period", "inactive"];
-
-const fallbackStatus: Record<EmployeeStatus, string> = {
-  active: "Active",
-  probation: "Probation",
-  on_leave: "On leave",
-  notice_period: "Notice period",
-  inactive: "Inactive",
-};
 const fallbackMode: Record<WorkMode, string> = { onsite: "Onsite", hybrid: "Hybrid", remote: "Remote" };
 
-export function statusLabel(s: EmployeeStatus, filters?: EmployeeFilters) {
-  return filters?.statuses.find((x) => x.value === s)?.label ?? fallbackStatus[s];
+/** No colour comes from the API, so it follows the flags: left → muted, blocked (e.g. suspended) → bad, notice → warn, else ok. */
+export function employmentStatusTone(s: Pick<EmploymentStatusRef, "can_login" | "is_notice_period" | "is_exit">): "ok" | "warn" | "bad" | "neutral" {
+  if (s.is_exit) return "neutral";
+  if (!s.can_login) return "bad";
+  return s.is_notice_period ? "warn" : "ok";
 }
 
 export function workModeLabel(m: WorkMode, filters?: EmployeeFilters) {

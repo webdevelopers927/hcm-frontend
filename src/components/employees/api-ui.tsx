@@ -5,9 +5,9 @@ import { AlertTriangle, Loader2, RotateCw } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { Avatar, Badge, Button, Card } from "@/components/ui/primitives";
 import { errorMessage } from "@/lib/api/client";
-import { hueFor, statusLabel, workModeLabel } from "@/lib/api/display";
+import { employmentStatusTone, hueFor, workModeLabel } from "@/lib/api/display";
 import { employeeKeys, getEmployeeFilters } from "@/lib/api/employees";
-import type { EmployeeStatus, EmployeeSummary, WorkMode } from "@/lib/api/types";
+import type { EmployeeSummary, EmploymentStatusRef, WorkMode } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 /** Lookups for filters and forms. Rarely change, so cached for the session. */
@@ -15,18 +15,10 @@ export function useEmployeeFilters() {
   return useQuery({ queryKey: employeeKeys.filters, queryFn: ({ signal }) => getEmployeeFilters(signal), staleTime: Infinity, gcTime: Infinity });
 }
 
-const statusTone: Record<EmployeeStatus, "ok" | "info" | "warn" | "violet" | "neutral"> = {
-  active: "ok",
-  probation: "info",
-  on_leave: "warn",
-  notice_period: "violet",
-  inactive: "neutral",
-};
-
-/** Status shown as dot + text, so it never relies on colour alone. */
-export function ApiStatusBadge({ status }: { status: EmployeeStatus }) {
-  const { data } = useEmployeeFilters();
-  return <Badge tone={statusTone[status]} dot>{statusLabel(status, data)}</Badge>;
+/** Status shown as dot + name, so it never relies on colour alone. */
+export function ApiStatusBadge({ status }: { status: EmploymentStatusRef | null }) {
+  if (!status) return <Badge tone="neutral" dot>No status</Badge>;
+  return <Badge tone={employmentStatusTone(status)} dot>{status.name}</Badge>;
 }
 
 const modeTone: Record<WorkMode, "neutral" | "accent" | "info"> = { onsite: "neutral", hybrid: "accent", remote: "info" };

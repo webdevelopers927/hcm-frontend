@@ -1,7 +1,10 @@
 /* Exact response shapes of the Laravel API (v1). */
 
 export type IdName = { id: number; name: string };
-export type EmployeeStatus = "active" | "probation" | "on_leave" | "notice_period" | "inactive";
+/** Employment statuses are managed in Setup; the flags drive sign-in and notice handling. */
+/** `is_exit`: the person has left (resigned, terminated…), unlike e.g. Suspended which also can't log in. */
+export type EmploymentStatusRef = { id: number; name: string; can_login: boolean; is_notice_period: boolean; is_exit: boolean };
+export type EmploymentStatusRow = EmploymentStatusRef & { sort_order: number; employees_count: number };
 export type WorkMode = "onsite" | "hybrid" | "remote";
 export type Gender = "male" | "female" | "other";
 export type ShiftRef = { id: number; name: string; start: string; end: string };
@@ -16,6 +19,9 @@ export const PERMISSIONS = [
   "employees.reset-2fa",
   "employees.unbind-device",
   "employees.import",
+  "employees.assign-shift",
+  "employment-statuses.manage",
+  "employees.offboard",
   "divisions.manage",
   "degree-programs.manage",
 ] as const;
@@ -41,7 +47,7 @@ export interface EmployeeListItem {
   avatar_url: string | null;
   designation: IdName | null;
   department: IdName | null;
-  status: EmployeeStatus;
+  employment_status: EmploymentStatusRef | null;
   work_mode: WorkMode;
   shift: ShiftRef | null;
   campaign: IdName | null;
@@ -65,7 +71,7 @@ export interface EmployeeProfile extends EmployeeListItem {
   birthday: string | null;
   reports_to: EmployeeSummary | null;
   direct_reports: EmployeeSummary[];
-  employment: { join_date: string; status: EmployeeStatus };
+  employment: { join_date: string; employment_status: EmploymentStatusRef | null };
   attendance_rate: null;
   leave_balances: null;
 }
@@ -81,7 +87,8 @@ export interface EmployeeSensitive {
 export interface EmployeeListResponse {
   data: EmployeeListItem[];
   meta: { current_page: number; last_page: number; per_page: number; total: number };
-  status_counts: Record<"all" | EmployeeStatus, number>;
+  /** `by_status` is keyed by status id (as a string) and has every status. Ignores the status filters. */
+  status_counts: { all: number; on_notice: number; by_status: Record<string, number> };
 }
 
 export interface EmployeeFilters {
@@ -91,7 +98,7 @@ export interface EmployeeFilters {
   campaigns: IdName[];
   shifts: ShiftRef[];
   locations: IdName[];
-  statuses: { value: EmployeeStatus; label: string }[];
+  employment_statuses: EmploymentStatusRef[];
   work_modes: { value: WorkMode; label: string }[];
 }
 
@@ -112,7 +119,9 @@ export type EmployeeSort = "name" | "-name" | "join_date" | "-join_date" | "depa
 
 export interface EmployeeQuery {
   search?: string;
-  status?: EmployeeStatus[];
+  employment_status_id?: number[];
+  /** Everyone in any notice-period status. */
+  on_notice?: 1;
   department_id?: number[];
   designation_id?: number[];
   division_id?: number[];
@@ -142,7 +151,7 @@ export interface FormOptions {
   marital_statuses: Option<MaritalStatus>[];
   religions: Option<Religion>[];
   blood_groups: Option<BloodGroup>[];
-  employment_statuses: Option<EmployeeStatus>[];
+  employment_statuses: EmploymentStatusRef[];
   duty_types: Option<DutyType>[];
   work_modes: Option<WorkMode>[];
   emergency_contact_relations: Option<EmergencyRelation>[];
@@ -244,7 +253,8 @@ export interface EmployeeDetail {
   shift_id: number | null;
   location_id: number | null;
   work_mode: WorkMode | null;
-  status: EmployeeStatus | null;
+  employment_status_id: number | null;
+  employment_status: EmploymentStatusRef | null;
   duty_type: DutyType | null;
   join_date: string | null;
   probation_start_date: string | null;
@@ -252,6 +262,12 @@ export interface EmployeeDetail {
   probation_end_date: string | null;
   confirmation_date: string | null;
   separation_date: string | null;
+  /** Required while the status is a notice-period status. */
+  resigned_date: string | null;
+  last_working_day: string | null;
+  reason_for_resignation: string | null;
+  /** The open off-boarding case, if any. */
+  offboarding: { id: number; exit_type: ExitType; stage: OffboardingStage } | null;
   reports_to_id: number | null;
   reports_to: EmployeeSummary | null;
   indirect_reports_to_id: number | null;
@@ -343,7 +359,7 @@ export interface EmployeePayload {
   email?: string | null;
   department_id?: number | null;
   designation_id?: number | null;
-  status?: EmployeeStatus | null;
+  employment_status_id?: number | null;
   shift_id?: number | null;
   duty_type?: DutyType | null;
   work_mode?: WorkMode | null;
@@ -355,6 +371,9 @@ export interface EmployeePayload {
   confirmation_date?: string | null;
   join_date?: string | null;
   separation_date?: string | null;
+  resigned_date?: string | null;
+  last_working_day?: string | null;
+  reason_for_resignation?: string | null;
   reports_to_id?: number | null;
   indirect_reports_to_id?: number | null;
   has_team_authority?: boolean;
@@ -409,3 +428,114 @@ export type ImportDryRunResponse = { message: string; dry_run: true; total_rows:
 export type ImportCommitResponse = { message: string; dry_run: false; imported: number; employee_ids: number[] };
 /** One row-level problem; `line` is the spreadsheet line (header = line 1). */
 export type ImportRowError = { line: number; column: string; messages: string[] };
+
+/* ---------- shift records (read-only) ---------- */
+
+export type ShiftDetail = ShiftRef & { break_minutes: number };
+export type EmployeeShiftSort = "name" | "-name" | "code" | "-code" | "department" | "-department" | "effective_from" | "-effective_from";
+
+export interface EmployeeShiftRow {
+  employee: { id: number; code: string; name: string; avatar_url: string | null };
+  department: IdName | null;
+  division: IdName | null;
+  /** null = no shift assigned. */
+  shift: ShiftDetail | null;
+  /** When the current shift started; null without history. */
+  effective_from: string | null;
+  previous_shift: ShiftDetail | null;
+  /** A scheduled future change. */
+  upcoming: { id: number; shift: ShiftDetail; effective_from: string } | null;
+}
+
+export interface EmployeeShiftsQuery {
+  search?: string;
+  shift_id?: number | "unassigned";
+  sort?: EmployeeShiftSort;
+  page?: number;
+  per_page?: number;
+}
+
+export interface EmployeeShiftsResponse extends Paginated<EmployeeShiftRow> {
+  /** Every shift by start time, with headcount. Honours search, ignores shift_id. */
+  shifts: (ShiftDetail & { employees_count: number })[];
+  counts: { all: number; unassigned: number };
+}
+
+export interface ShiftHistoryEntry {
+  id: number;
+  shift: ShiftDetail;
+  effective_from: string;
+  status: "upcoming" | "current" | "past";
+  assigned_by: IdName | null;
+  created_at: string;
+}
+
+/* ---------- off-boarding ---------- */
+
+export type ExitType = "resignation" | "termination" | "contract_end" | "retirement";
+export type OffboardingStage = "resigned" | "notice_period" | "clearance" | "exit_interview" | "completed";
+
+export interface ChecklistItem { id: number; label: string; owner: string | null; done: boolean; done_at: string | null; done_by: IdName | null }
+
+export interface OffboardingCase {
+  id: number;
+  employee: {
+    id: number;
+    code: string;
+    name: string;
+    avatar_url: string | null;
+    designation: IdName | null;
+    department: IdName | null;
+    employment_status: EmploymentStatusRef | null;
+  };
+  exit_type: ExitType;
+  stage: OffboardingStage;
+  resigned_date: string | null;
+  last_working_day: string | null;
+  /** Negative once passed. */
+  days_left: number | null;
+  reason_for_resignation: string | null;
+  separation_date: string | null;
+  final_employment_status: EmploymentStatusRef | null;
+  checklist_progress: { done: number; total: number };
+  /** Only on single-case responses. */
+  checklist?: ChecklistItem[];
+  exited_at: string | null;
+  completed_at: string | null;
+  created_by: IdName | null;
+  created_at: string;
+}
+
+export interface OffboardingSummary {
+  in_progress: number;
+  leaving_in_30_days: number;
+  pending_clearance: number;
+  completed: number;
+  by_stage: Record<OffboardingStage, number>;
+  stages: Option<OffboardingStage>[];
+  exit_types: Option<ExitType>[];
+}
+
+export interface OffboardingList extends Paginated<OffboardingCase> { summary: OffboardingSummary }
+
+export interface OffboardingQuery { search?: string; stage?: OffboardingStage; exit_type?: ExitType; page?: number; per_page?: number }
+
+export interface StartOffboardingInput {
+  employee_id: number;
+  exit_type: ExitType;
+  resigned_date: string;
+  last_working_day: string;
+  reason_for_resignation: string;
+  notice_employment_status_id?: number;
+  final_employment_status_id?: number;
+  stage?: Exclude<OffboardingStage, "completed">;
+}
+
+export type OffboardingPatch = Partial<{
+  exit_type: ExitType;
+  stage: Exclude<OffboardingStage, "completed">;
+  final_employment_status_id: number | null;
+  resigned_date: string;
+  last_working_day: string;
+  reason_for_resignation: string;
+}>;

@@ -32,11 +32,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@/components/session/session-provider";
 import { Badge, Button, Card } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
 import { ApiError, errorMessage } from "@/lib/api/client";
-import { STATUS_ORDER, shiftLabel, statusLabel } from "@/lib/api/display";
+import { shiftLabel } from "@/lib/api/display";
 import { bulkDeleteEmployees, deleteEmployee, employeeKeys, exportEmployees, getDevice, listDrafts, listEmployees, resetTwoFactor, unbindDevice } from "@/lib/api/employees";
-import type { BulkDeleteResponse, EmployeeListItem, EmployeeListResponse, EmployeeQuery, EmployeeSort, EmployeeStatus, WorkMode } from "@/lib/api/types";
+import type { BulkDeleteResponse, EmployeeListItem, EmployeeListResponse, EmployeeQuery, EmployeeSort, WorkMode } from "@/lib/api/types";
 import { cn, formatDate, tenure } from "@/lib/utils";
 import { ApiModeBadge, ApiStatusBadge, ConfirmDialog, EmployeeAvatar, ErrorState, Skeleton, useEmployeeFilters } from "./api-ui";
 import { ImportDialog } from "./import-dialog";
@@ -44,7 +45,7 @@ import { ModuleHeader } from "./module-kit";
 
 /* ---------------- URL ⇄ query ---------------- */
 
-const ARRAY_KEYS = ["status", "department_id", "designation_id", "location_id", "shift_id", "work_mode"] as const;
+const ARRAY_KEYS = ["employment_status_id", "department_id", "designation_id", "location_id", "shift_id", "work_mode"] as const;
 const SORTS: EmployeeSort[] = ["name", "-name", "join_date", "-join_date", "department", "-department", "code", "-code"];
 const PAGE_SIZES = [12, 24, 48];
 
@@ -55,7 +56,8 @@ function readQuery(sp: URLSearchParams): EmployeeQuery {
   const perPage = Number(sp.get("per_page"));
   return {
     search: sp.get("search") ?? undefined,
-    status: list("status") as EmployeeStatus[],
+    employment_status_id: nums("employment_status_id"),
+    on_notice: sp.get("on_notice") === "1" ? 1 : undefined,
     department_id: nums("department_id"),
     designation_id: nums("designation_id"),
     location_id: nums("location_id"),
@@ -67,7 +69,7 @@ function readQuery(sp: URLSearchParams): EmployeeQuery {
   };
 }
 
-/** URL uses readable comma lists (status=active,probation); the API gets arrays. */
+/** URL uses readable comma lists (employment_status_id=1,2); the API gets arrays. */
 function writeQuery(q: EmployeeQuery) {
   const sp = new URLSearchParams();
   if (q.search) sp.set("search", q.search);
@@ -75,6 +77,7 @@ function writeQuery(q: EmployeeQuery) {
     const v = q[k];
     if (v && v.length) sp.set(k, v.join(","));
   }
+  if (q.on_notice) sp.set("on_notice", "1");
   if (q.sort && q.sort !== "name") sp.set("sort", q.sort);
   if (q.page && q.page > 1) sp.set("page", String(q.page));
   if (q.per_page && q.per_page !== 12) sp.set("per_page", String(q.per_page));
@@ -165,9 +168,10 @@ export function EmployeesView() {
   const rows = list.data?.data ?? [];
   const meta = list.data?.meta;
   const counts = list.data?.status_counts;
-  const activeStatus = query.status?.length === 1 ? query.status[0] : undefined;
+  const statuses = filtersQ.data?.employment_statuses ?? [];
+  const activeStatus = query.employment_status_id?.length === 1 ? query.employment_status_id[0] : undefined;
   const filterCount = (query.department_id?.length ?? 0) + (query.designation_id?.length ?? 0) + (query.location_id?.length ?? 0) + (query.shift_id?.length ?? 0) + (query.work_mode?.length ?? 0);
-  const hasFilters = filterCount > 0 || !!query.search || !!query.status?.length;
+  const hasFilters = filterCount > 0 || !!query.search || !!query.employment_status_id?.length || !!query.on_notice;
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   const patchRow = (id: number, patch: Partial<EmployeeListItem>) =>
@@ -267,22 +271,31 @@ export function EmployeesView() {
       {/* Status tabs: counts come from the server and already honour the other filters. */}
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <div role="tablist" aria-label="Filter by status" className="flex w-max gap-1 rounded-xl border border-line bg-surface p-1 shadow-soft">
-          {([undefined, ...STATUS_ORDER] as (EmployeeStatus | undefined)[]).map((s) => {
-            const on = s === activeStatus && !(s === undefined && (query.status?.length ?? 0) > 1);
-            const count = counts ? (s ? counts[s] : counts.all) : undefined;
-            return (
+          {[
+            { key: "all", label: "All", count: counts?.all, on: !activeStatus && !query.on_notice && !(query.employment_status_id?.length ?? 0), patch: { employment_status_id: undefined, on_notice: undefined } },
+            ...statuses.map((st) => ({
+              key: String(st.id),
+              label: st.name,
+              count: counts?.by_status[String(st.id)],
+              on: activeStatus === st.id && !query.on_notice,
+              patch: { employment_status_id: [st.id], on_notice: undefined },
+            })),
+            { key: "notice", label: "On notice", count: counts?.on_notice, on: !!query.on_notice, patch: { employment_status_id: undefined, on_notice: 1 as const } },
+          ]
+            // Empty statuses add noise; keep "All" and whatever is selected.
+            .filter((t) => t.key === "all" || t.on || !counts || (t.count ?? 0) > 0)
+            .map((t) => (
               <button
-                key={s ?? "all"}
+                key={t.key}
                 role="tab"
-                aria-selected={on}
-                onClick={() => setQuery({ status: s ? [s] : undefined })}
-                className={cn("inline-flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] font-medium whitespace-nowrap transition", on ? "bg-ink text-canvas" : "text-ink-2 hover:bg-surface-3 hover:text-ink")}
+                aria-selected={t.on}
+                onClick={() => setQuery(t.patch)}
+                className={cn("inline-flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] font-medium whitespace-nowrap transition", t.on ? "bg-ink text-canvas" : "text-ink-2 hover:bg-surface-3 hover:text-ink")}
               >
-                {s ? statusLabel(s, filtersQ.data) : "All"}
-                <span className={cn("tabular min-w-4 text-[11px]", on ? "text-canvas/70" : "text-ink-3")}>{count ?? "·"}</span>
+                {t.label}
+                <span className={cn("tabular min-w-4 text-[11px]", t.on ? "text-canvas/70" : "text-ink-3")}>{t.count ?? "·"}</span>
               </button>
-            );
-          })}
+            ))}
         </div>
       </div>
 
@@ -317,21 +330,20 @@ export function EmployeesView() {
             {filtersOpen && <FilterPanel query={query} onChange={(p) => setQuery(p)} onClose={() => setFiltersOpen(false)} />}
           </div>
 
-          <label className="relative md:hidden">
-            <span className="sr-only">Sort by</span>
-            <select
-              value={query.sort}
-              onChange={(e) => setQuery({ sort: e.target.value as EmployeeSort })}
-              className="h-10 appearance-none rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-soft outline-none"
-            >
-              <option value="name">Name A–Z</option>
-              <option value="-name">Name Z–A</option>
-              <option value="-join_date">Newest joiners</option>
-              <option value="join_date">Longest tenure</option>
-              <option value="department">Department</option>
-              <option value="code">Employee code</option>
-            </select>
-          </label>
+          <Select
+            className="w-44 md:hidden"
+            aria-label="Sort by"
+            value={query.sort ?? "name"}
+            onChange={(v) => setQuery({ sort: v as EmployeeSort })}
+            options={[
+              { value: "name", label: "Name A–Z" },
+              { value: "-name", label: "Name Z–A" },
+              { value: "-join_date", label: "Newest joiners" },
+              { value: "join_date", label: "Longest tenure" },
+              { value: "department", label: "Department" },
+              { value: "code", label: "Employee code" },
+            ]}
+          />
 
           {list.isFetching && !list.isPending && <Loader2 className="h-4 w-4 animate-spin text-ink-3" aria-label="Updating" />}
 
@@ -399,7 +411,7 @@ export function EmployeesView() {
                       <div className="truncate font-medium text-ink">{e.designation?.name ?? "—"}</div>
                       <div className="truncate text-[12px] text-ink-3">{e.department?.name ?? "—"}</div>
                     </td>
-                    <td className="py-3 pr-4"><ApiStatusBadge status={e.status} /></td>
+                    <td className="py-3 pr-4"><ApiStatusBadge status={e.employment_status} /></td>
                     <td className="hidden py-3 pr-4 xl:table-cell"><ApiModeBadge mode={e.work_mode} /></td>
                     <td className="tabular hidden py-3 pr-4 text-[13px] text-ink-2 lg:table-cell">{shiftLabel(e.shift)}</td>
                     <td className="hidden py-3 pr-4 text-[13px] text-ink-2 2xl:table-cell">{e.location?.name ?? "—"}</td>
@@ -432,7 +444,7 @@ export function EmployeesView() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold text-ink">{e.name}</span>
-                      <ApiStatusBadge status={e.status} />
+                      <ApiStatusBadge status={e.employment_status} />
                     </div>
                     <div className="mt-0.5 truncate text-[12px] text-ink-3">
                       {e.designation?.name ?? "—"} · {e.code}
@@ -671,7 +683,10 @@ function ActiveChips({ query, onChange, onClearAll, total }: { query: EmployeeQu
   named("location_id", data?.locations);
   named("shift_id", data?.shifts);
   query.work_mode?.forEach((m) => chips.push({ key: `wm-${m}`, label: data?.work_modes.find((x) => x.value === m)?.label ?? m, remove: () => onChange({ work_mode: query.work_mode!.filter((x) => x !== m) }) }));
-  if (query.status && query.status.length > 1) query.status.forEach((s) => chips.push({ key: `st-${s}`, label: statusLabel(s, data), remove: () => onChange({ status: query.status!.filter((x) => x !== s) }) }));
+  if (query.employment_status_id && query.employment_status_id.length > 1)
+    query.employment_status_id.forEach((id) =>
+      chips.push({ key: `st-${id}`, label: data?.employment_statuses.find((x) => x.id === id)?.name ?? `#${id}`, remove: () => onChange({ employment_status_id: query.employment_status_id!.filter((x) => x !== id) }) }),
+    );
   if (query.search) chips.push({ key: "q", label: `“${query.search}”`, remove: () => onChange({ search: undefined }) });
   if (!chips.length) return null;
   return (
@@ -777,7 +792,7 @@ function PersonCard({ e, selected, onSelect, onOpen }: { e: EmployeeListItem; se
       <div className="absolute top-4 left-4">
         <input type="checkbox" aria-label={`Select ${e.name}`} className="h-4 w-4 accent-[var(--ink)]" checked={selected} onChange={onSelect} />
       </div>
-      <div className="absolute top-4 right-4"><ApiStatusBadge status={e.status} /></div>
+      <div className="absolute top-4 right-4"><ApiStatusBadge status={e.employment_status} /></div>
       <button onClick={onOpen} className="flex w-full flex-col items-center pt-5 text-center">
         <EmployeeAvatar e={e} size="lg" />
         <div className="mt-3 text-[15px] font-semibold text-ink">{e.name}</div>
@@ -807,9 +822,14 @@ function Pagination({ meta, onPage, onPageSize }: { meta: EmployeeListResponse["
     <nav aria-label="Pagination" className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
       <div className="flex items-center gap-3 text-[13px] text-ink-3">
         <span className="tabular">{from}–{to} of {total}</span>
-        <select value={per_page} onChange={(e) => onPageSize(Number(e.target.value))} aria-label="Rows per page" className="h-8 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink outline-none">
-          {PAGE_SIZES.map((n) => <option key={n} value={n}>{n} / page</option>)}
-        </select>
+        <Select
+          size="sm"
+          className="w-32"
+          aria-label="Rows per page"
+          value={String(per_page)}
+          onChange={(v) => onPageSize(Number(v))}
+          options={PAGE_SIZES.map((n) => ({ value: String(n), label: `${n} / page` }))}
+        />
       </div>
       <div className="flex items-center gap-1">
         <button disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-3 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
@@ -892,7 +912,7 @@ function PreviewDrawer({ e, onClose, onDelete }: { e: EmployeeListItem; onClose:
           <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">{e.name}</h2>
           <p className="text-sm text-ink-2">{e.designation?.name ?? "—"}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <ApiStatusBadge status={e.status} />
+            <ApiStatusBadge status={e.employment_status} />
             <Badge className="tabular">{e.code}</Badge>
           </div>
         </div>

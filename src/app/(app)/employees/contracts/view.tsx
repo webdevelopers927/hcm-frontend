@@ -2,8 +2,9 @@
 
 import { AlertTriangle, FilePlus2, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { DataTable, Drawer, ModuleHeader, PersonCell, SearchBox, Segments, StatStrip, Switch, TableFooter, Toolbar, matches, selectCls, type Column } from "@/components/employees/module-kit";
+import { DataTable, Drawer, ModuleHeader, PersonCell, SearchBox, Segments, StatStrip, Switch, TableFooter, Toolbar, matches, type Column } from "@/components/employees/module-kit";
 import { Badge, Button, Field, Input } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
 import { employees } from "@/lib/data";
 import { contracts as seed, type Contract } from "@/lib/module-data";
@@ -169,10 +170,7 @@ function ContractDrawer({ mode, contract, onClose, onSave }: { mode: "new" | "re
     >
       <div className="space-y-4">
         <Field label="Employee" htmlFor="ce" error={error && !employeeId ? error : undefined}>
-          <select id="ce" className={selectCls} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} disabled={mode === "renew"}>
-            <option value="">Select employee…</option>
-            {employees.map((e) => <option key={e.id} value={e.id}>{e.name} · {e.code}</option>)}
-          </select>
+          <Select inputId="ce" value={employeeId} onChange={setEmployeeId} disabled={mode === "renew"} invalid={!!error && !employeeId} placeholder="Select employee…" options={employees.map((e) => ({ value: e.id, label: `${e.name} · ${e.code}` }))} />
         </Field>
         <Field label="Contract type" htmlFor="ck">
           <div className="grid grid-cols-2 gap-2">

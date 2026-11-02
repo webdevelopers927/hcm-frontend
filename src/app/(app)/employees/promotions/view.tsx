@@ -2,8 +2,9 @@
 
 import { ArrowRight, Info, Plus, TrendingUp } from "lucide-react";
 import { useState } from "react";
-import { ApprovalBadge, ApproveReject, DataTable, Drawer, ModuleHeader, PersonCell, SearchBox, Segments, StatStrip, TableFooter, Toolbar, matches, selectCls, useDecisions, type Column } from "@/components/employees/module-kit";
+import { ApprovalBadge, ApproveReject, DataTable, Drawer, ModuleHeader, PersonCell, SearchBox, Segments, StatStrip, TableFooter, Toolbar, matches, useDecisions, type Column } from "@/components/employees/module-kit";
 import { Badge, Button, Field, Input } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
 import { employees } from "@/lib/data";
 import { promotions as seed, type Approval, type Promotion } from "@/lib/module-data";
@@ -145,10 +146,7 @@ function NewPromotion({ onClose, onSave }: { onClose: () => void; onSave: (p: Pr
     >
       <div className="space-y-4">
         <Field label="Employee" htmlFor="pe" error={errors.employee}>
-          <select id="pe" className={selectCls} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-            <option value="">Select employee…</option>
-            {employees.map((e) => <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}
-          </select>
+          <Select inputId="pe" value={employeeId} onChange={setEmployeeId} invalid={!!errors.employee} placeholder="Select employee…" options={employees.map((e) => ({ value: e.id, label: `${e.name} · ${e.designation}` }))} />
         </Field>
         {employee && to && (
           <div className="rounded-xl bg-surface-2 p-3">

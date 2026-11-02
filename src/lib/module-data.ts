@@ -52,28 +52,6 @@ export const employmentRecords: EmploymentRecord[] = employees.slice(0, 40).map(
   };
 });
 
-/* ---------- Shifts ---------- */
-export type Shift = { id: string; name: string; start: string; end: string; color: string; breakMins: number };
-export const shifts: Shift[] = [
-  { id: "S1", name: "Morning", start: "09:00", end: "18:00", color: "var(--accent)", breakMins: 60 },
-  { id: "S2", name: "Evening", start: "14:00", end: "23:00", color: "var(--info)", breakMins: 45 },
-  { id: "S3", name: "Night", start: "21:00", end: "06:00", color: "var(--violet)", breakMins: 45 },
-  { id: "S4", name: "Flexible", start: "10:00", end: "19:00", color: "var(--warn)", breakMins: 60 },
-];
-
-export type ShiftAssignment = { id: string; employee: Employee; shift: Shift; division: string; effectiveFrom: string; previous: Shift | null };
-export const shiftAssignments: ShiftAssignment[] = employees.slice(0, 48).map((e, i) => {
-  const idx = e.shift.startsWith("Morning") ? 0 : e.shift.startsWith("Evening") ? 1 : e.shift.startsWith("Night") ? 2 : 3;
-  return {
-    id: `SA-${300 + i}`,
-    employee: e,
-    shift: shifts[idx]!,
-    division: ["North", "Central", "South"][i % 3]!,
-    effectiveFrom: day(1 + (i % 10), 1 + (i % 27)),
-    previous: i % 4 === 0 ? shifts[(idx + 1) % 4]! : null,
-  };
-});
-
 /* ---------- Credentials ---------- */
 export type Credential = {
   id: string;
@@ -96,35 +74,6 @@ export const credentials: Credential[] = employees.map((e, i) => {
     deviceBound: i % 4 === 0,
     lastLogin: state === "Active" ? `${(i % 9) + 1}${i % 2 ? "h" : "d"} ago` : null,
     createdAt: e.joinDate,
-  };
-});
-
-/* ---------- Off-boarding ---------- */
-export type OffboardStage = "Resigned" | "Notice period" | "Clearance" | "Exit interview" | "Completed";
-export const OFFBOARD_STAGES: OffboardStage[] = ["Resigned", "Notice period", "Clearance", "Exit interview", "Completed"];
-export type Offboarding = {
-  id: string;
-  employee: Employee;
-  type: "Resignation" | "Termination" | "Contract end" | "Retirement";
-  stage: OffboardStage;
-  submittedAt: string;
-  effectiveDate: string;
-  lastWorkingDay: string;
-  checklist: { label: string; done: boolean; owner: string }[];
-};
-const checklistTpl = ["Handover document", "Laptop & assets returned", "Access revoked", "Final settlement", "Experience letter issued"];
-export const offboardings: Offboarding[] = [3, 8, 11, 19, 24, 29, 33, 41, 47].map((n, i) => {
-  const stage = OFFBOARD_STAGES[i % 5]!;
-  const doneCount = OFFBOARD_STAGES.indexOf(stage) + (i % 2);
-  return {
-    id: `OB-${700 + i}`,
-    employee: E(n),
-    type: (["Resignation", "Resignation", "Contract end", "Termination", "Resignation", "Retirement"] as const)[i % 6]!,
-    stage,
-    submittedAt: day(9 + (i % 2), 3 + i * 2),
-    effectiveDate: day(10 + (i % 2), 5 + i * 2),
-    lastWorkingDay: day(11, 1 + i * 3),
-    checklist: checklistTpl.map((label, k) => ({ label, done: k < doneCount, owner: ["Manager", "IT", "IT", "Finance", "People"][k]! })),
   };
 });
 

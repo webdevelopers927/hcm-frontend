@@ -348,9 +348,6 @@ export function DetailList({ rows }: { rows: [string, ReactNode][] }) {
   );
 }
 
-export const selectCls =
-  "h-11 w-full appearance-none rounded-xl border border-line bg-surface px-3.5 text-[15px] text-ink outline-none transition hover:border-line-strong focus:border-ink focus:ring-4 focus:ring-accent/40 sm:text-sm";
-
 export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button

@@ -2,8 +2,9 @@
 
 import { Download, Info, Laptop } from "lucide-react";
 import { useState } from "react";
-import { DataTable, Drawer, FormSection, ModuleHeader, PersonCell, SearchBox, Segments, StatStrip, Switch, TableFooter, Toolbar, matches, selectCls, type Column } from "@/components/employees/module-kit";
+import { DataTable, Drawer, FormSection, ModuleHeader, PersonCell, SearchBox, Segments, StatStrip, Switch, TableFooter, Toolbar, matches, type Column } from "@/components/employees/module-kit";
 import { Badge, Button, Field, Input, ProgressBar } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
 import { employees } from "@/lib/data";
 import { employmentRecords, type EmploymentRecord } from "@/lib/module-data";
@@ -161,9 +162,7 @@ function EmploymentDrawer({ record, onClose, onSave }: { record: EmploymentRecor
         <FormSection title="Probation">
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Duration" htmlFor="pd">
-              <select id="pd" className={selectCls} value={r.probationMonths} onChange={(e) => set("probationMonths", Number(e.target.value))}>
-                {[1, 2, 3, 6].map((m) => <option key={m} value={m}>{m} months</option>)}
-              </select>
+              <Select inputId="pd" value={String(r.probationMonths)} onChange={(v) => set("probationMonths", Number(v))} options={[1, 2, 3, 6].map((m) => ({ value: String(m), label: `${m} months` }))} />
             </Field>
             <Field label="Start date" htmlFor="ps"><Input id="ps" type="date" value={r.probationStart} onChange={(e) => set("probationStart", e.target.value)} /></Field>
             <Field label="End date" htmlFor="pe"><Input id="pe" type="date" value={r.probationEnd} onChange={(e) => set("probationEnd", e.target.value)} /></Field>
@@ -177,10 +176,7 @@ function EmploymentDrawer({ record, onClose, onSave }: { record: EmploymentRecor
               <Input id="ctt" type="date" value={r.contractTo ?? ""} onChange={(e) => set("contractTo", e.target.value || null)} />
             </Field>
             <Field label="Team reporting" htmlFor="tr" className="sm:col-span-2">
-              <select id="tr" className={selectCls} value={r.reportsTo?.id ?? ""} onChange={(e) => set("reportsTo", employees.find((x) => x.id === e.target.value) ?? null)}>
-                <option value="">No manager</option>
-                {employees.slice(0, 12).map((m) => <option key={m.id} value={m.id}>{m.name} — {m.designation}</option>)}
-              </select>
+              <Select inputId="tr" value={r.reportsTo?.id ?? ""} onChange={(v) => set("reportsTo", employees.find((x) => x.id === v) ?? null)} clearable placeholder="No manager" options={employees.slice(0, 12).map((m) => ({ value: m.id, label: `${m.name} — ${m.designation}` }))} />
             </Field>
           </div>
         </FormSection>
@@ -199,9 +195,7 @@ function EmploymentDrawer({ record, onClose, onSave }: { record: EmploymentRecor
         <FormSection title="Resignation">
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Status" htmlFor="rs">
-              <select id="rs" className={selectCls} value={r.resignStatus} onChange={(e) => set("resignStatus", e.target.value as EmploymentRecord["resignStatus"])}>
-                {["None", "Submitted", "Accepted"].map((s) => <option key={s}>{s}</option>)}
-              </select>
+              <Select inputId="rs" value={r.resignStatus} onChange={(v) => set("resignStatus", v as EmploymentRecord["resignStatus"])} options={["None", "Submitted", "Accepted"].map((s) => ({ value: s, label: s }))} />
             </Field>
             {r.resignStatus !== "None" && (
               <>

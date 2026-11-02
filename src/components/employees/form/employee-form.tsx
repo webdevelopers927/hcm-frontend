@@ -50,6 +50,7 @@ import { Drawer } from "../module-kit";
 import { FieldStatusContext } from "./controls";
 import {
   SECTIONS,
+  clientErrors,
   completeness,
   fieldId,
   firstSectionWith,
@@ -264,7 +265,10 @@ function EmployeeFormEditor({ initial, options, countries }: { initial: Employee
 
   const dirtyBySection = useMemo(() => Object.fromEntries(SECTIONS.map((s) => [s.id, isSectionDirty(s.id, form, baseline)])) as Record<SectionId, boolean>, [form, baseline]);
   const anyDirty = Object.values(dirtyBySection).some(Boolean);
-  const comp = useMemo(() => completeness(form, detail), [form, detail]);
+  const noticeIds = useMemo(() => new Set(options.employment_statuses.filter((st) => st.is_notice_period).map((st) => st.id)), [options.employment_statuses]);
+  const comp = useMemo(() => completeness(form, detail, noticeIds), [form, detail, noticeIds]);
+  // Server errors win; local checks (e.g. date order) show until the server has spoken.
+  const shownErrors = useMemo(() => ({ ...clientErrors(form), ...errors }), [form, errors]);
   const missingKeys = Object.keys(comp.missing);
   const pct = Math.round(((comp.total - missingKeys.length) / Math.max(comp.total, 1)) * 100);
   const bySection = useMemo(() => {
@@ -496,7 +500,7 @@ function EmployeeFormEditor({ initial, options, countries }: { initial: Employee
   );
 
   return (
-    <FieldStatusContext.Provider value={{ errors, nudges, flash }}>
+    <FieldStatusContext.Provider value={{ errors: shownErrors, nudges, flash }}>
       <div className="space-y-5" ref={top}>
         <Link href={isDraft && detail ? "/employees/drafts" : detail ? `/employees/${detail.id}` : "/employees"} className="inline-flex items-center gap-1 text-sm font-medium text-ink-2 hover:text-ink">
           <ChevronLeft className="h-4 w-4" /> {isDraft && detail ? "Drafts" : detail ? "Profile" : "All people"}

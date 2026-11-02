@@ -1,12 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Camera, Copy, Loader2, Trash2 } from "lucide-react";
+import { ArrowRight, Camera, Copy, Hourglass, Loader2, Lock, Trash2, UserMinus } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 import { Avatar, Button } from "@/components/ui/primitives";
 import { formatCnicInput, hueFor, shiftLabel } from "@/lib/api/display";
 import { employeeKeys, geoKeys, listEmployees, listNationalities, listStates, searchCities } from "@/lib/api/employees";
-import type { Country, EmployeeDetail, EmployeeSensitive, EmployeeSummary, FormOptions } from "@/lib/api/types";
+import type { Country, EmployeeDetail, ExitType, OffboardingStage, EmployeeSensitive, EmployeeSummary, FormOptions } from "@/lib/api/types";
 import { cn, formatDate } from "@/lib/utils";
+import { ConfirmDialog } from "../api-ui";
 import { Combobox, F, FilePicker, SecretInput, Segmented, SelectInput, Switch, TextArea, TextInput, uploadHint, useUploader } from "./controls";
 import { type CountryPick, type FormKey, type FormState, type SecretKey } from "./model";
 
@@ -234,6 +237,9 @@ export function PersonalSection(p: SectionProps) {
 
 /* ---------------- 2. Positional ---------------- */
 
+const EXIT_TYPE_LABEL: Record<ExitType, string> = { resignation: "Resignation", termination: "Termination", contract_end: "Contract end", retirement: "Retirement" };
+const STAGE_LABEL: Record<OffboardingStage, string> = { resigned: "Resigned", notice_period: "Notice period", clearance: "Clearance", exit_interview: "Exit interview", completed: "Completed" };
+
 function PersonPicker({ name, label, value, onChange, exclude, hint }: { name: string; label: string; value: EmployeeSummary | null; onChange: (v: EmployeeSummary | null) => void; exclude: number[]; hint?: string }) {
   return (
     <Combobox<EmployeeSummary>
@@ -265,14 +271,75 @@ function PersonPicker({ name, label, value, onChange, exclude, hint }: { name: s
   );
 }
 
+/** Status select. Spells out what the chosen status means; on a real employee, asks before locking them out. */
+function EmploymentStatusField({ form, set, options, detail }: Pick<SectionProps, "form" | "set" | "options" | "detail">) {
+  const [pending, setPending] = useState<string | null>(null);
+  const byId = (v: string) => options.employment_statuses.find((st) => String(st.id) === v);
+  const chosen = byId(form.employment_status_id);
+  const target = pending ? byId(pending) : undefined;
+  const isReal = !!detail && !detail.is_draft;
+
+  const change = (v: string) => {
+    const next = byId(v);
+    if (isReal && next && !next.can_login && (chosen?.can_login ?? true)) return setPending(v);
+    set("employment_status_id", v);
+  };
+
+  return (
+    <>
+      <SelectInput
+        name="employment_status_id"
+        label="Employment status"
+        value={form.employment_status_id}
+        onChange={change}
+        options={options.employment_statuses.map((st) => ({ value: String(st.id), label: st.name }))}
+        footer={
+          chosen && !chosen.can_login ? (
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-bad"><Lock className="h-3 w-3" /> This person won&apos;t be able to sign in</p>
+          ) : chosen?.is_notice_period ? (
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-warn"><Hourglass className="h-3 w-3" /> Serving notice</p>
+          ) : null
+        }
+      />
+      {pending && target && (
+        <ConfirmDialog
+          title={`Move to “${target.name}”?`}
+          body={<>{detail?.name ?? "This person"} will be signed out everywhere when you save, and won&apos;t be able to sign in while in this status.</>}
+          confirmLabel="Change status"
+          danger
+          onCancel={() => setPending(null)}
+          onConfirm={() => {
+            set("employment_status_id", pending);
+            setPending(null);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export function PositionalSection(p: SectionProps) {
   const { form, set, patch, options, detail, employeeId } = p;
   const designations = options.designations.filter((d) => !form.department_id || d.department_id === null || String(d.department_id) === form.department_id);
   const probationChanged = detail && (form.probation_start_date !== (detail.probation_start_date ?? "") || form.probation_duration_id !== String(detail.probation_duration_id ?? ""));
   const self = employeeId ? [employeeId] : [];
+  const onNotice = !!options.employment_statuses.find((st) => String(st.id) === form.employment_status_id)?.is_notice_period;
 
   return (
     <div className="space-y-8">
+      {detail?.offboarding && (
+        <Link
+          href={`/employees/offboarding?case=${detail.offboarding.id}`}
+          className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-4 transition hover:border-line-strong"
+        >
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-warn-soft text-warn"><UserMinus className="h-4 w-4" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink">Being off-boarded · {EXIT_TYPE_LABEL[detail.offboarding.exit_type]}</span>
+            <span className="block text-[13px] text-ink-3">Stage: {STAGE_LABEL[detail.offboarding.stage]}. Checklist and exit details live on the off-boarding case.</span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-ink-3" />
+        </Link>
+      )}
       <Group title="Role">
         <TextInput name="email" label="Business email" type="email" value={form.email} onChange={(v) => set("email", v)} hint="Also their login email" placeholder="name@company.com" className="sm:col-span-2" />
         <SelectInput
@@ -289,7 +356,7 @@ export function PositionalSection(p: SectionProps) {
         <SelectInput name="designation_id" label="Designation" value={form.designation_id} onChange={(v) => set("designation_id", v)} options={idOpts(designations)} placeholder={form.department_id ? "Select…" : "Pick a department first"} />
         <SelectInput name="division_id" label="Division" value={form.division_id} onChange={(v) => set("division_id", v)} options={idOpts(options.divisions)} placeholder="None" />
         <SelectInput name="campaign_id" label="Campaign" value={form.campaign_id} onChange={(v) => set("campaign_id", v)} options={idOpts(options.campaigns)} placeholder="None" />
-        <SelectInput name="status" label="Employment status" value={form.status} onChange={(v) => set("status", v)} options={opts(options.employment_statuses)} />
+        <EmploymentStatusField form={form} set={set} options={options} detail={detail} />
         <SelectInput name="duty_type" label="Duty type" value={form.duty_type} onChange={(v) => set("duty_type", v)} options={opts(options.duty_types)} />
         <SelectInput name="shift_id" label="Shift" value={form.shift_id} onChange={(v) => set("shift_id", v)} options={options.shifts.map((s) => ({ value: String(s.id), label: shiftLabel(s) }))} placeholder="No shift" />
         <SelectInput name="location_id" label="Location" value={form.location_id} onChange={(v) => set("location_id", v)} options={idOpts(options.locations)} placeholder="Not set" />
@@ -317,6 +384,16 @@ export function PositionalSection(p: SectionProps) {
         </F>
         <TextInput name="confirmation_date" label="Confirmation date" type="date" value={form.confirmation_date} onChange={(v) => set("confirmation_date", v)} min={form.join_date || undefined} />
         <TextInput name="separation_date" label="Separation date" type="date" value={form.separation_date} onChange={(v) => set("separation_date", v)} min={form.join_date || undefined} />
+        {onNotice && (
+          <div className="animate-rise space-y-4 rounded-2xl border border-warn/30 bg-warn-soft/30 p-4 sm:col-span-2">
+            <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink"><Hourglass className="h-3.5 w-3.5 text-warn" /> Serving notice: these are needed</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextInput name="resigned_date" label="Resigned date" type="date" value={form.resigned_date} onChange={(v) => set("resigned_date", v)} min={form.join_date || undefined} required />
+              <TextInput name="last_working_day" label="Last working day" type="date" value={form.last_working_day} onChange={(v) => set("last_working_day", v)} min={form.resigned_date || undefined} required />
+              <TextArea name="reason_for_resignation" label="Reason for resignation" value={form.reason_for_resignation} onChange={(v) => set("reason_for_resignation", v)} maxLength={2000} required className="sm:col-span-2" />
+            </div>
+          </div>
+        )}
       </Group>
 
       <Group title="Reporting" description="Only people with team authority can be picked as a reporting authority.">

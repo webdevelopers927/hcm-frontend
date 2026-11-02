@@ -2,8 +2,9 @@
 
 import { Download, FileImage, FileText, MoreHorizontal, Trash2, UploadCloud } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
-import { Drawer, ModuleHeader, SearchBox, Segments, StatStrip, Toolbar, matches, selectCls } from "@/components/employees/module-kit";
+import { Drawer, ModuleHeader, SearchBox, Segments, StatStrip, Toolbar, matches } from "@/components/employees/module-kit";
 import { Avatar, Badge, Button, Card, Field } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
 import { employees } from "@/lib/data";
 import { DOC_TYPES, hrDocs as seed, type HrDoc } from "@/lib/module-data";
@@ -172,15 +173,10 @@ function UploadDrawer({ onClose, onSave }: { onClose: () => void; onSave: (d: Hr
     >
       <div className="space-y-4">
         <Field label="Employee" htmlFor="de">
-          <select id="de" className={selectCls} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-            <option value="">Select employee…</option>
-            {employees.map((e) => <option key={e.id} value={e.id}>{e.name} · {e.code}</option>)}
-          </select>
+          <Select inputId="de" value={employeeId} onChange={setEmployeeId} placeholder="Select employee…" options={employees.map((e) => ({ value: e.id, label: `${e.name} · ${e.code}` }))} />
         </Field>
         <Field label="Document type" htmlFor="dt">
-          <select id="dt" className={selectCls} value={type} onChange={(e) => setType(e.target.value)}>
-            {DOC_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
+          <Select inputId="dt" value={type} onChange={setType} options={DOC_TYPES.map((t) => ({ value: t, label: t }))} />
         </Field>
         <div
           onDragOver={(e) => { e.preventDefault(); setOver(true); }}

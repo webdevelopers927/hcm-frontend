@@ -17,6 +17,7 @@ import {
   Users,
   Link2Off,
   Loader2,
+  Lock,
   Mail,
   MapPin,
   Pencil,
@@ -73,6 +74,7 @@ export function EmployeeProfile({ id }: { id: number }) {
   }
   const e = q.data;
   const full: Full = detail.data && options.data ? { d: detail.data, o: options.data } : undefined;
+  const lockedOut = e.employment_status ? !e.employment_status.can_login : false;
   const tabs = TABS.filter(
     (t) => (t !== "Security" || e.can.reset_2fa || e.can.unbind_device || e.device_bound) && (canSeeAll || !DETAIL_TABS.includes(t)),
   );
@@ -103,7 +105,8 @@ export function EmployeeProfile({ id }: { id: number }) {
               <div className="pb-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-[28px]">{e.name}</h1>
-                  <ApiStatusBadge status={e.status} />
+                  <ApiStatusBadge status={e.employment_status} />
+                  {lockedOut && !tabs.includes("Security") && <CantSignIn />}
                 </div>
                 <p className="mt-0.5 text-[15px] text-ink-2">
                   {e.designation?.name ?? "No designation"} · {e.department?.name ?? "No department"}
@@ -142,6 +145,7 @@ export function EmployeeProfile({ id }: { id: number }) {
                 className={cn("relative h-12 px-3 text-sm font-medium whitespace-nowrap transition", tab === t ? "text-ink" : "text-ink-3 hover:text-ink")}
               >
                 {t}
+                {t === "Security" && lockedOut && <CantSignIn className="ml-2" />}
                 {tab === t && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-ink" />}
               </button>
             ))}
@@ -161,6 +165,15 @@ export function EmployeeProfile({ id }: { id: number }) {
       </div>
 
     </div>
+  );
+}
+
+/** Their status blocks sign-in (the server refuses and signs them out). */
+function CantSignIn({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-1 rounded-full bg-bad-soft px-2 py-0.5 text-[11px] font-semibold text-bad", className)} title="Their employment status doesn&apos;t allow signing in">
+      <Lock className="h-3 w-3" /> Can&apos;t sign in
+    </span>
   );
 }
 
@@ -231,6 +244,12 @@ function Overview({ e, full }: { e: Profile; full: Full }) {
           ) : (
             <div className="rounded-xl border border-dashed border-line p-3 text-[13px] text-ink-3">No manager — top of the reporting line</div>
           )}
+          {d?.indirect_reports_to && (
+            <Link href={`/employees/${d.indirect_reports_to.id}`} className="mt-2 block rounded-xl border border-dashed border-line-strong p-3 hover:bg-surface-2">
+              <div className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-ink-3 uppercase">Indirect · dotted line</div>
+              <SummaryRow e={d.indirect_reports_to} />
+            </Link>
+          )}
           <div className="ml-7 h-5 w-px bg-line-strong" />
           <div className="flex items-center gap-3 rounded-xl bg-ink p-3 text-canvas">
             <EmployeeAvatar e={e} size="sm" />
@@ -267,7 +286,8 @@ function Job({ e, full }: { e: Profile; full: Full }) {
     ["Department", e.department?.name ?? "—"],
     ["Campaign", e.campaign?.name ?? "—"],
     ["Reports to", e.reports_to?.name ?? "—"],
-    ["Status", <ApiStatusBadge key="s" status={e.employment.status} />],
+    ...(full ? ([["Indirect reporting", full.d.indirect_reports_to?.name ?? "—"]] as [string, ReactNode][]) : []),
+    ["Status", <ApiStatusBadge key="s" status={e.employment.employment_status} />],
     ["Work mode", <ApiModeBadge key="w" mode={e.work_mode} />],
     ["Shift", shiftLabel(e.shift)],
     ["Joining date", formatDate(e.employment.join_date)],
@@ -280,7 +300,6 @@ function Job({ e, full }: { e: Profile; full: Full }) {
     rows.push(
       ["Division", d.division_id ? o.divisions.find((x) => x.id === d.division_id)?.name ?? "—" : "—"],
       ["Duty type", label(o.duty_types, d.duty_type)],
-      ["Indirect reporting", d.indirect_reports_to?.name ?? "—"],
       ["Team authority", d.has_team_authority ? "Yes" : "No"],
       ["Probation", d.probation_start_date ? `${date(d.probation_start_date)}${probation ? ` · ${probation}` : ""}` : "—"],
       ["Probation ends", date(d.probation_end_date)],

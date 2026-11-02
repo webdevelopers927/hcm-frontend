@@ -14,13 +14,22 @@ import type {
   EmployeeProfile,
   EmployeeQuery,
   EmployeeSensitive,
+  EmploymentStatusRow,
+  EmployeeShiftsQuery,
+  EmployeeShiftsResponse,
   FormOptions,
   GeoState,
   IdName,
   ImportCommitResponse,
   ImportDryRunResponse,
   ImportRowError,
+  OffboardingCase,
+  OffboardingList,
+  OffboardingPatch,
+  OffboardingQuery,
   Paginated,
+  StartOffboardingInput,
+  ShiftHistoryEntry,
   Upload,
   UploadPurpose,
   User,
@@ -97,6 +106,69 @@ export function downloadPrivateFile(downloadUrl: string, filename: string) {
   const path = downloadUrl.includes("/api/v1/") ? downloadUrl.slice(downloadUrl.indexOf("/api/v1/") + "/api/v1/".length) : downloadUrl;
   return apiDownload(path, {}, filename);
 }
+
+/* ---------- employment statuses (Setup) ---------- */
+
+export const employmentStatusKeys = { all: ["employment-statuses"] as const };
+
+/** Ordered by sort_order. */
+export const listEmploymentStatuses = (signal?: AbortSignal) => apiFetch<{ data: EmploymentStatusRow[] }>("employment-statuses", { signal }).then((r) => r.data);
+
+export type EmploymentStatusInput = { name: string; can_login: boolean; is_notice_period: boolean; is_exit: boolean; sort_order: number };
+
+export const createEmploymentStatus = (input: Omit<EmploymentStatusInput, "sort_order">) =>
+  apiFetch<{ data: EmploymentStatusRow }>("employment-statuses", { method: "POST", body: input }).then((r) => r.data);
+
+/** Turning can_login off signs everyone in that status out. */
+export const updateEmploymentStatus = (id: number, changes: Partial<EmploymentStatusInput>) =>
+  apiFetch<{ data: EmploymentStatusRow }>(`employment-statuses/${id}`, { method: "PATCH", body: changes }).then((r) => r.data);
+
+/** 409 with a readable message while any employee record still uses it. */
+export const deleteEmploymentStatus = (id: number) => apiFetch<{ message: string }>(`employment-statuses/${id}`, { method: "DELETE" });
+
+/* ---------- off-boarding ---------- */
+
+export const offboardingKeys = {
+  all: ["offboardings"] as const,
+  list: (q: OffboardingQuery) => ["offboardings", "list", q] as const,
+  detail: (id: number) => ["offboardings", "detail", id] as const,
+};
+
+/** Open cases plus those completed in the last 90 days. */
+export const listOffboardings = (query: OffboardingQuery, signal?: AbortSignal) => apiFetch<OffboardingList>("offboardings", { query: { ...query }, signal });
+
+const oneCase = (p: Promise<{ data: OffboardingCase }>) => p.then((r) => r.data);
+
+/** Includes the checklist. */
+export const getOffboarding = (id: number, signal?: AbortSignal) => oneCase(apiFetch(`offboardings/${id}`, { signal }));
+/** 409 if the employee already has an open case. */
+export const startOffboarding = (input: StartOffboardingInput) => oneCase(apiFetch("offboardings", { method: "POST", body: input }));
+/** 409 once completed. */
+export const updateOffboarding = (id: number, changes: OffboardingPatch) => oneCase(apiFetch(`offboardings/${id}`, { method: "PATCH", body: changes }));
+/** 422 errors.checklist while any item is unticked. */
+export const completeOffboarding = (id: number) => oneCase(apiFetch(`offboardings/${id}/complete`, { method: "POST" }));
+/** Restores the previous status and clears the exit dates. 409 once they have left. */
+export const cancelOffboarding = (id: number) => apiFetch<{ message: string }>(`offboardings/${id}`, { method: "DELETE" });
+
+/* Checklist calls return the whole case. */
+export const addChecklistItem = (id: number, item: { label: string; owner?: string | null }) => oneCase(apiFetch(`offboardings/${id}/checklist`, { method: "POST", body: item }));
+export const updateChecklistItem = (id: number, itemId: number, changes: { done?: boolean; label?: string; owner?: string | null }) =>
+  oneCase(apiFetch(`offboardings/${id}/checklist/${itemId}`, { method: "PATCH", body: changes }));
+export const deleteChecklistItem = (id: number, itemId: number) => oneCase(apiFetch(`offboardings/${id}/checklist/${itemId}`, { method: "DELETE" }));
+
+/* ---------- shift records (read-only) ---------- */
+
+export const shiftKeys = {
+  list: (q: EmployeeShiftsQuery) => ["employee-shifts", "list", q] as const,
+  history: (employeeId: number) => ["employee-shifts", "history", employeeId] as const,
+};
+
+export const listEmployeeShifts = (query: EmployeeShiftsQuery, signal?: AbortSignal) =>
+  apiFetch<EmployeeShiftsResponse>("employee-shifts", { query: { ...query }, signal });
+
+/** Newest first: upcoming, current, then past. */
+export const getShiftHistory = (employeeId: number, signal?: AbortSignal) =>
+  apiFetch<{ data: ShiftHistoryEntry[] }>(`employees/${employeeId}/shift-history`, { signal }).then((r) => r.data);
 
 /* ---------- geo reference data ---------- */
 
