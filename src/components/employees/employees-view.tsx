@@ -39,7 +39,7 @@ import { shiftLabel } from "@/lib/api/display";
 import { bulkDeleteEmployees, deleteEmployee, employeeKeys, exportEmployees, getDevice, listDrafts, listEmployees, resetTwoFactor, unbindDevice } from "@/lib/api/employees";
 import type { BulkDeleteResponse, EmployeeListItem, EmployeeListResponse, EmployeeQuery, EmployeeSort, WorkMode } from "@/lib/api/types";
 import { cn, formatDate, tenure } from "@/lib/utils";
-import { ApiModeBadge, ApiStatusBadge, ConfirmDialog, EmployeeAvatar, ErrorState, Skeleton, useEmployeeFilters } from "./api-ui";
+import { ApiModeBadge, ApiStatusBadge, ConfirmDialog, EmployeeAvatar, ErrorState, Skeleton, useEmployeeFilters, useSlow } from "./api-ui";
 import { ImportDialog } from "./import-dialog";
 import { ModuleHeader } from "./module-kit";
 
@@ -121,6 +121,7 @@ export function EmployeesView() {
     queryFn: ({ signal }) => listEmployees(query, signal),
     placeholderData: keepPreviousData,
   });
+  const stale = useSlow(list.isPlaceholderData);
 
   // Debounced search, kept in sync when the URL changes from elsewhere (e.g. "Clear all").
   const [q, setQ] = useState(query.search ?? "");
@@ -362,7 +363,7 @@ export function EmployeesView() {
       {/* Results */}
       {list.isError && !list.data ? (
         <ErrorState error={list.error} onRetry={() => list.refetch()} title="Couldn't load employees" />
-      ) : list.isPending ? (
+      ) : list.isPending || stale ? (
         <TableSkeleton />
       ) : rows.length === 0 ? (
         <EmptyState filtered={hasFilters} onReset={clearAll} />
@@ -806,7 +807,7 @@ function PersonCard({ e, selected, onSelect, onOpen }: { e: EmployeeListItem; se
         </div>
         <div>
           <div className="text-ink-3">Joined</div>
-          <div className="truncate font-medium text-ink">{tenure(e.join_date)} ago</div>
+          <div className="truncate font-medium text-ink">{tenure(e.join_date)}</div>
         </div>
       </div>
     </Card>

@@ -12,7 +12,7 @@ import { hueFor } from "@/lib/api/display";
 import { deleteEmployee, employeeKeys, listDrafts } from "@/lib/api/employees";
 import type { DraftListItem } from "@/lib/api/types";
 import { cn, formatDate } from "@/lib/utils";
-import { ConfirmDialog, ErrorState, Skeleton } from "./api-ui";
+import { ConfirmDialog, ErrorState, Skeleton, useSlow } from "./api-ui";
 import { ModuleHeader, SearchBox } from "./module-kit";
 
 const PER_PAGE = 20;
@@ -45,6 +45,7 @@ export function DraftsView() {
 
   const query = { search: search || undefined, page, per_page: PER_PAGE };
   const list = useQuery({ queryKey: employeeKeys.drafts(query), queryFn: ({ signal }) => listDrafts(query, signal), placeholderData: keepPreviousData });
+  const stale = useSlow(list.isPlaceholderData);
 
   const remove = useMutation({
     mutationFn: (d: DraftListItem) => deleteEmployee(d.id),
@@ -80,7 +81,7 @@ export function DraftsView() {
 
       {list.isError ? (
         <ErrorState error={list.error} onRetry={() => list.refetch()} title="Couldn't load drafts" />
-      ) : list.isPending ? (
+      ) : list.isPending || stale ? (
         <Card className="divide-y divide-line">{Array.from({ length: 5 }, (_, i) => <div key={i} className="flex items-center gap-3 p-4"><Skeleton className="h-10 w-10 rounded-full" /><Skeleton className="h-4 w-48" /></div>)}</Card>
       ) : rows.length === 0 ? (
         <Card className="flex flex-col items-center px-6 py-16 text-center">

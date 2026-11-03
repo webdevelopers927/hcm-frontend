@@ -5,7 +5,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, Clock3, Coffee, History, Loader2
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { EmployeeAvatar, ErrorState, Skeleton } from "@/components/employees/api-ui";
+import { EmployeeAvatar, ErrorState, Skeleton, useSlow } from "@/components/employees/api-ui";
 import { DataTable, Drawer, ModuleHeader, SearchBox, Segments, TableFooter, Toolbar, type Column } from "@/components/employees/module-kit";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { getShiftHistory, listEmployeeShifts, shiftKeys } from "@/lib/api/employees";
@@ -82,6 +82,7 @@ export function View() {
   };
 
   const list = useQuery({ queryKey: shiftKeys.list(query), queryFn: ({ signal }) => listEmployeeShifts(query, signal), placeholderData: keepPreviousData });
+  const stale = useSlow(list.isPlaceholderData);
   const color = useShiftColors(list.data?.shifts);
   const [historyFor, setHistoryFor] = useState<Row | null>(null);
 
@@ -230,17 +231,7 @@ export function View() {
 
       {list.isError ? (
         <ErrorState error={list.error} onRetry={() => list.refetch()} title="Couldn't load shift records" />
-      ) : list.isPending ? (
-        <Card className="divide-y divide-line">
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="flex items-center gap-3 p-4">
-              <Skeleton className="h-10 w-10 rounded-full" />
-              <Skeleton className="h-4 w-40" />
-              <Skeleton className="ml-auto h-4 w-24" />
-            </div>
-          ))}
-        </Card>
-      ) : rows.length === 0 ? (
+      ) : !list.isPending && !stale && rows.length === 0 ? (
         <Card className="flex flex-col items-center px-6 py-14 text-center">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-3 text-ink-2">{query.search ? <SearchX className="h-5 w-5" /> : <Users className="h-5 w-5" />}</span>
           <h3 className="mt-3 text-sm font-semibold text-ink">{query.search ? "No results" : "No one on this shift"}</h3>
@@ -257,6 +248,7 @@ export function View() {
         <DataTable
           rows={rows}
           columns={columns}
+          loading={list.isPending || stale}
           onRowClick={setHistoryFor}
           footer={pager}
           mobile={(r) => (

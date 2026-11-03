@@ -4,7 +4,11 @@ export type IdName = { id: number; name: string };
 /** Employment statuses are managed in Setup; the flags drive sign-in and notice handling. */
 /** `is_exit`: the person has left (resigned, terminated…), unlike e.g. Suspended which also can't log in. */
 export type EmploymentStatusRef = { id: number; name: string; can_login: boolean; is_notice_period: boolean; is_exit: boolean };
-export type EmploymentStatusRow = EmploymentStatusRef & { sort_order: number; employees_count: number };
+/** `is_system`: set automatically by the app (e.g. "Contract expired"); can't be renamed or deleted. */
+export type EmploymentStatusRow = EmploymentStatusRef & { sort_order: number; employees_count: number; is_system: boolean };
+/** Duty types are managed in Setup; `is_contractual` marks fixed-term or engagement-based work. */
+export type DutyTypeRef = { id: number; name: string; is_contractual: boolean };
+export type DutyTypeRow = DutyTypeRef & { sort_order: number; employees_count: number };
 export type WorkMode = "onsite" | "hybrid" | "remote";
 export type Gender = "male" | "female" | "other";
 export type ShiftRef = { id: number; name: string; start: string; end: string };
@@ -21,7 +25,9 @@ export const PERMISSIONS = [
   "employees.import",
   "employees.assign-shift",
   "employment-statuses.manage",
+  "duty-types.manage",
   "employees.offboard",
+  "contracts.manage",
   "divisions.manage",
   "degree-programs.manage",
 ] as const;
@@ -142,7 +148,6 @@ export type Salutation = "mr" | "mrs" | "ms" | "miss" | "dr" | "prof" | "engr";
 export type MaritalStatus = "single" | "married" | "divorced" | "widowed" | "separated";
 export type Religion = "islam" | "christianity" | "hinduism" | "sikhism" | "buddhism" | "judaism" | "other" | "prefer_not_to_say";
 export type BloodGroup = "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
-export type DutyType = "full_time" | "part_time" | "contract" | "freelance" | "internship" | "temporary" | "consultant";
 export type EmergencyRelation = "father" | "mother" | "spouse" | "brother" | "sister" | "son" | "daughter" | "guardian" | "relative" | "friend" | "other";
 
 export interface FormOptions {
@@ -152,7 +157,7 @@ export interface FormOptions {
   religions: Option<Religion>[];
   blood_groups: Option<BloodGroup>[];
   employment_statuses: EmploymentStatusRef[];
-  duty_types: Option<DutyType>[];
+  duty_types: DutyTypeRef[];
   work_modes: Option<WorkMode>[];
   emergency_contact_relations: Option<EmergencyRelation>[];
   probation_durations: { id: number; name: string; months: number }[];
@@ -255,7 +260,8 @@ export interface EmployeeDetail {
   work_mode: WorkMode | null;
   employment_status_id: number | null;
   employment_status: EmploymentStatusRef | null;
-  duty_type: DutyType | null;
+  duty_type_id: number | null;
+  duty_type: DutyTypeRef | null;
   join_date: string | null;
   probation_start_date: string | null;
   probation_duration_id: number | null;
@@ -361,7 +367,7 @@ export interface EmployeePayload {
   designation_id?: number | null;
   employment_status_id?: number | null;
   shift_id?: number | null;
-  duty_type?: DutyType | null;
+  duty_type_id?: number | null;
   work_mode?: WorkMode | null;
   campaign_id?: number | null;
   location_id?: number | null;
@@ -473,7 +479,7 @@ export interface ShiftHistoryEntry {
 /* ---------- off-boarding ---------- */
 
 export type ExitType = "resignation" | "termination" | "contract_end" | "retirement";
-export type OffboardingStage = "resigned" | "notice_period" | "clearance" | "exit_interview" | "completed";
+export type OffboardingStage = "resigned" | "notice_period" | "clearance" | "completed";
 
 export interface ChecklistItem { id: number; label: string; owner: string | null; done: boolean; done_at: string | null; done_by: IdName | null }
 
@@ -539,3 +545,72 @@ export type OffboardingPatch = Partial<{
   last_working_day: string;
   reason_for_resignation: string;
 }>;
+
+/* ---------- contracts ---------- */
+
+export type ContractStatus = "active" | "expiring" | "expired" | "upcoming" | "renewed";
+
+export interface ContractEmployee {
+  id: number;
+  code: string;
+  name: string;
+  avatar_url: string | null;
+  designation: IdName | null;
+  department: IdName | null;
+  duty_type: DutyTypeRef | null;
+  employment_status: EmploymentStatusRef | null;
+}
+
+export interface Contract {
+  id: number;
+  employee: ContractEmployee;
+  /** YYYY-MM-DD */
+  start_date: string;
+  end_date: string;
+  /** Negative once ended. */
+  days_left: number;
+  /** 0–100, share of the period elapsed. */
+  progress: number;
+  status: ContractStatus;
+  /** Expiring or expired, and not renewed yet. */
+  renewable: boolean;
+  leave_entitled: boolean;
+  notes: string | null;
+  renewed_from_id: number | null;
+  renewed_at: string | null;
+  expired_at: string | null;
+  created_by: IdName | null;
+  created_at: string;
+}
+
+export interface ContractSummary {
+  all: number;
+  active: number;
+  expiring: number;
+  expired: number;
+  upcoming: number;
+  /** The "expiring" window, in days. */
+  expiring_days: number;
+  expiring_this_month: { count: number; names: string[] };
+}
+
+export interface ContractList { data: Contract[]; meta: Paginated<Contract>["meta"]; summary: ContractSummary }
+
+/** Renewed contracts are hidden unless status=renewed or employee_id is given. */
+export interface ContractQuery { search?: string; status?: ContractStatus; employee_id?: number; page?: number; per_page?: number }
+
+/** Employees with a contractual duty type. */
+export interface ContractEligibleEmployee {
+  id: number;
+  code: string;
+  name: string;
+  avatar_url: string | null;
+  designation: IdName | null;
+  duty_type: DutyTypeRef | null;
+  has_current_contract: boolean;
+}
+
+export interface NewContractInput { employee_id: number; start_date: string; end_date: string; leave_entitled?: boolean; notes?: string | null }
+export type ContractPatch = Partial<Pick<Contract, "start_date" | "end_date" | "leave_entitled" | "notes">>;
+/** start_date defaults to the day after the old end. */
+export interface RenewContractInput { end_date: string; start_date?: string; leave_entitled?: boolean; notes?: string | null }

@@ -3,10 +3,16 @@ import type {
   BoundDevice,
   BulkDeleteResponse,
   City,
+  Contract,
+  ContractEligibleEmployee,
+  ContractList,
+  ContractPatch,
+  ContractQuery,
   Country,
   DegreeProgram,
   Division,
   DraftListItem,
+  DutyTypeRow,
   EmployeeDetail,
   EmployeeFilters,
   EmployeeListResponse,
@@ -20,6 +26,8 @@ import type {
   FormOptions,
   GeoState,
   IdName,
+  NewContractInput,
+  RenewContractInput,
   ImportCommitResponse,
   ImportDryRunResponse,
   ImportRowError,
@@ -125,6 +133,50 @@ export const updateEmploymentStatus = (id: number, changes: Partial<EmploymentSt
 
 /** 409 with a readable message while any employee record still uses it. */
 export const deleteEmploymentStatus = (id: number) => apiFetch<{ message: string }>(`employment-statuses/${id}`, { method: "DELETE" });
+
+/* ---------- duty types (Setup) ---------- */
+
+export const dutyTypeKeys = { all: ["duty-types"] as const };
+
+/** Ordered by sort_order, then name. */
+export const listDutyTypes = (signal?: AbortSignal) => apiFetch<{ data: DutyTypeRow[] }>("duty-types", { signal }).then((r) => r.data);
+
+export type DutyTypeInput = { name: string; is_contractual: boolean; sort_order: number };
+
+export const createDutyType = (input: Omit<DutyTypeInput, "sort_order">) =>
+  apiFetch<{ data: DutyTypeRow }>("duty-types", { method: "POST", body: input }).then((r) => r.data);
+
+export const updateDutyType = (id: number, changes: Partial<DutyTypeInput>) =>
+  apiFetch<{ data: DutyTypeRow }>(`duty-types/${id}`, { method: "PATCH", body: changes }).then((r) => r.data);
+
+/** 409 with a readable message while any employee record (drafts and deleted included) still uses it. */
+export const deleteDutyType = (id: number) => apiFetch<{ message: string }>(`duty-types/${id}`, { method: "DELETE" });
+
+/* ---------- contracts ---------- */
+
+export const contractKeys = {
+  all: ["contracts"] as const,
+  list: (q: ContractQuery) => ["contracts", "list", q] as const,
+  detail: (id: number) => ["contracts", "detail", id] as const,
+};
+
+/** Current contracts, soonest end date first, with the stat-card summary. */
+export const listContracts = (query: ContractQuery, signal?: AbortSignal) => apiFetch<ContractList>("contracts", { query: { ...query }, signal });
+
+const oneContract = (p: Promise<{ data: Contract }>) => p.then((r) => r.data);
+
+export const getContract = (id: number, signal?: AbortSignal) => oneContract(apiFetch(`contracts/${id}`, { signal }));
+/** 422 on employee_id (not contractual) or start_date (overlaps another contract). */
+export const createContract = (input: NewContractInput) => oneContract(apiFetch("contracts", { method: "POST", body: input }));
+/** 409 for a renewed contract. */
+export const updateContract = (id: number, changes: ContractPatch) => oneContract(apiFetch(`contracts/${id}`, { method: "PATCH", body: changes }));
+/** Returns the new contract. 422 errors.contract unless it's renewable. Renewing an expired one restores the employee's previous status. */
+export const renewContract = (id: number, input: RenewContractInput) => oneContract(apiFetch(`contracts/${id}/renew`, { method: "POST", body: input }));
+/** 409 for a renewed contract: delete the renewal first. */
+export const deleteContract = (id: number) => apiFetch<{ message: string }>(`contracts/${id}`, { method: "DELETE" });
+
+export const listContractEligible = (search: string, signal?: AbortSignal) =>
+  apiFetch<{ data: ContractEligibleEmployee[] }>("contracts/eligible-employees", { query: { search: search || undefined }, signal }).then((r) => r.data);
 
 /* ---------- off-boarding ---------- */
 

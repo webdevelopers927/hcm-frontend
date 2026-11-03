@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
  * static list or an async search.
  */
 
-export type SelectOption = { value: string; label: string };
+/** `tag`: a small label shown beside the option in the menu (e.g. "Contractual"). */
+export type SelectOption = { value: string; label: string; tag?: string };
 
 type Look = {
   invalid?: boolean;
@@ -90,6 +91,16 @@ export function Select({
       value={selected}
       options={options}
       onChange={(o) => onChange(o?.value ?? "")}
+      formatOptionLabel={(o, { context }) =>
+        context === "menu" && o.tag ? (
+          <span className="flex items-center justify-between gap-2">
+            <span className="truncate">{o.label}</span>
+            <span className="shrink-0 rounded-md border border-current px-1.5 text-[11px] leading-[18px] opacity-60">{o.tag}</span>
+          </span>
+        ) : (
+          o.label
+        )
+      }
       placeholder={placeholder}
       isDisabled={disabled}
       isClearable={clearable}

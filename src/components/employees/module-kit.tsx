@@ -9,6 +9,7 @@ import { Avatar, Badge, Button, Card } from "@/components/ui/primitives";
 import type { Employee } from "@/lib/data";
 import type { Approval } from "@/lib/module-data";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "./api-ui";
 
 /* ---------------- Header + module switcher ---------------- */
 
@@ -170,6 +171,8 @@ export function DataTable<T extends { id: string }>({
   onRowClick,
   emptyText = "Nothing here yet",
   footer,
+  loading,
+  loadingRows = 6,
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -177,7 +180,11 @@ export function DataTable<T extends { id: string }>({
   onRowClick?: (row: T) => void;
   emptyText?: string;
   footer?: ReactNode;
+  /** Keep the header and show shimmering rows in place of the data. */
+  loading?: boolean;
+  loadingRows?: number;
 }) {
+  if (loading) return <DataTableSkeleton columns={columns} rows={rows.length || loadingRows} footer={footer} />;
   if (rows.length === 0) {
     return (
       <Card className="flex flex-col items-center px-6 py-14 text-center">
@@ -219,6 +226,58 @@ export function DataTable<T extends { id: string }>({
         {rows.map((r) => (
           <li key={r.id} onClick={onRowClick ? () => onRowClick(r) : undefined} className={cn("px-4 py-3.5", onRowClick && "cursor-pointer active:bg-surface-2")}>
             {mobile(r)}
+          </li>
+        ))}
+      </ul>
+      {footer}
+    </Card>
+  );
+}
+
+/* Varied widths so the placeholder reads like text, not a grid of bars. */
+const SKELETON_WIDTHS = ["w-24", "w-32", "w-20", "w-28", "w-16"];
+
+function DataTableSkeleton<T>({ columns, rows, footer }: { columns: Column<T>[]; rows: number; footer?: ReactNode }) {
+  return (
+    <Card className="overflow-hidden" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading…</span>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-line bg-surface-2 text-[12px] tracking-wide text-ink-3 uppercase">
+              {columns.map((c, i) => (
+                <th key={c.key} className={cn("py-3 pr-4 font-medium whitespace-nowrap", i === 0 && "pl-5", c.from && fromCls[c.from], c.className)}>
+                  {c.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {Array.from({ length: rows }, (_, r) => (
+              <tr key={r} style={{ opacity: 1 - r * (0.5 / rows) }}>
+                {columns.map((c, i) => (
+                  <td key={c.key} className={cn("h-[61px] py-3 pr-4 align-middle", i === 0 && "pl-5", c.from && fromCls[c.from], c.className)}>
+                    {i === 0 ? (
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                        <div className="space-y-2"><Skeleton className="h-3.5 w-36" /><Skeleton className="h-3 w-24" /></div>
+                      </div>
+                    ) : c.header === "" ? null : (
+                      <Skeleton className={cn("h-3.5", SKELETON_WIDTHS[(r + i) % SKELETON_WIDTHS.length])} />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul className="divide-y divide-line md:hidden">
+        {Array.from({ length: Math.min(rows, 6) }, (_, r) => (
+          <li key={r} className="flex items-center gap-3 px-4 py-3.5">
+            <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-40" /><Skeleton className="h-3 w-28" /></div>
+            <Skeleton className="h-5 w-16 rounded-full" />
           </li>
         ))}
       </ul>

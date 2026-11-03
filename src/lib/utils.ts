@@ -21,14 +21,28 @@ export function formatDate(iso: string, opts: Intl.DateTimeFormatOptions = { day
   return new Date(iso).toLocaleDateString("en-GB", opts);
 }
 
-export function tenure(iso: string, now = new Date("2026-11-01")) {
-  const start = new Date(iso);
+/** Time since joining. Never negative: a future join date is "New joiner", under a month is "< 1 mo". */
+export function tenure(iso: string, now = new Date()) {
+  const start = parseDate(iso);
+  if (start > now) return "New joiner";
   let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
   if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 1) return "< 1 mo";
   const y = Math.floor(months / 12);
   const m = months % 12;
-  if (y === 0) return `${Math.max(m, 0)} mo`;
+  if (y === 0) return `${m} mo`;
   return m === 0 ? `${y} yr` : `${y} yr ${m} mo`;
+}
+
+/** "YYYY-MM-DD" as a local date (new Date() would read it as UTC midnight). */
+function parseDate(iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
+}
+
+/** Today as local "YYYY-MM-DD". */
+export function todayIso(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 /** Masks all but the last `visible` characters, keeping separators. */
@@ -46,8 +60,8 @@ export function mask(value: string, visible = 4) {
     .join("");
 }
 
-/** Demo "today" so mock data stays meaningful. Swap for `new Date()` with a real API. */
-export const TODAY = "2026-11-01";
+/** Today (local) as "YYYY-MM-DD", fixed when the module loads. */
+export const TODAY = todayIso();
 
 export function daysUntil(iso: string, from = TODAY) {
   return Math.round((new Date(iso).getTime() - new Date(from).getTime()) / 86_400_000);

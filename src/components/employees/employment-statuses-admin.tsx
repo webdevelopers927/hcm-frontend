@@ -125,7 +125,10 @@ export function EmploymentStatusesAdmin() {
                         </div>
                       </td>
                     )}
-                    <td className="px-4 py-3 font-medium text-ink">{r.name}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-ink">{r.name}</div>
+                      {r.is_system && <div className="mt-0.5 flex items-center gap-1 text-[12px] text-ink-3"><Lock className="h-3 w-3" /> Set automatically when a contract expires</div>}
+                    </td>
                     <td className="px-4 py-3">{r.can_login ? <Badge tone="ok">Yes</Badge> : <Badge tone="bad"><Lock className="h-3 w-3" /> No</Badge>}</td>
                     <td className="hidden px-4 py-3 sm:table-cell">{r.is_notice_period ? <Badge tone="warn"><Hourglass className="h-3 w-3" /> Yes</Badge> : <Badge tone="neutral">No</Badge>}</td>
                     <td className="hidden px-4 py-3 md:table-cell">{r.is_exit ? <Badge tone="neutral"><DoorOpen className="h-3 w-3" /> Yes</Badge> : <span className="text-[13px] text-ink-3">No</span>}</td>
@@ -133,7 +136,16 @@ export function EmploymentStatusesAdmin() {
                     {manage && (
                       <td className="px-2 py-2 text-right whitespace-nowrap">
                         <button type="button" onClick={() => setEditing(r)} aria-label={`Edit ${r.name}`} className="rounded-lg p-2 text-ink-3 hover:bg-surface-3 hover:text-ink"><Pencil className="h-4 w-4" /></button>
-                        <button type="button" onClick={() => setDeleting(r)} aria-label={`Delete ${r.name}`} className="rounded-lg p-2 text-ink-3 hover:bg-bad-soft hover:text-bad"><Trash2 className="h-4 w-4" /></button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(r)}
+                          disabled={r.is_system}
+                          aria-label={r.is_system ? `${r.name} is a system status and can't be deleted` : `Delete ${r.name}`}
+                          title={r.is_system ? "System status: can't be deleted" : undefined}
+                          className="rounded-lg p-2 text-ink-3 hover:bg-bad-soft hover:text-bad disabled:pointer-events-none disabled:opacity-30"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </td>
                     )}
                   </tr>
@@ -211,8 +223,13 @@ function StatusForm({ row, onDone, onCancel }: { row?: EmploymentStatusRow; onDo
       onKeyDown={(e) => e.key === "Escape" && !confirmLock && onCancel()}
       className="space-y-3 rounded-2xl border border-line bg-surface p-4 shadow-soft"
     >
-      <Field label={row ? `Edit ${row.name}` : "New status"} htmlFor={fieldId} error={error}>
-        <Input ref={input} id={fieldId} value={name} onChange={(e) => { setName(e.target.value); setError(undefined); }} invalid={!!error} maxLength={100} placeholder="e.g. On sabbatical" />
+      <Field
+        label={row ? `Edit ${row.name}` : "New status"}
+        htmlFor={fieldId}
+        error={error}
+        hint={row?.is_system ? <span className="flex items-center gap-1 text-[12px] text-ink-3"><Lock className="h-3 w-3" /> System status: the name can&apos;t change</span> : undefined}
+      >
+        <Input ref={input} id={fieldId} value={name} disabled={row?.is_system} onChange={(e) => { setName(e.target.value); setError(undefined); }} invalid={!!error} maxLength={100} placeholder="e.g. On sabbatical" />
       </Field>
       <div className="grid gap-3 sm:grid-cols-3">
         <Switch name={`${fieldId}-login`} label="Can log in" description="Off: they can't sign in and are signed out." checked={canLogin} onChange={setCanLogin} />

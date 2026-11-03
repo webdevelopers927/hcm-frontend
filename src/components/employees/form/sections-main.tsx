@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Camera, Copy, Hourglass, Loader2, Lock, Trash2, UserMinus } from "lucide-react";
+import { ArrowRight, Camera, Copy, Hourglass, Loader2, Lock, ScrollText, Trash2, UserMinus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Avatar, Button } from "@/components/ui/primitives";
@@ -238,7 +238,7 @@ export function PersonalSection(p: SectionProps) {
 /* ---------------- 2. Positional ---------------- */
 
 const EXIT_TYPE_LABEL: Record<ExitType, string> = { resignation: "Resignation", termination: "Termination", contract_end: "Contract end", retirement: "Retirement" };
-const STAGE_LABEL: Record<OffboardingStage, string> = { resigned: "Resigned", notice_period: "Notice period", clearance: "Clearance", exit_interview: "Exit interview", completed: "Completed" };
+const STAGE_LABEL: Record<OffboardingStage, string> = { resigned: "Resigned", notice_period: "Notice period", clearance: "Clearance", completed: "Completed" };
 
 function PersonPicker({ name, label, value, onChange, exclude, hint }: { name: string; label: string; value: EmployeeSummary | null; onChange: (v: EmployeeSummary | null) => void; exclude: number[]; hint?: string }) {
   return (
@@ -357,7 +357,18 @@ export function PositionalSection(p: SectionProps) {
         <SelectInput name="division_id" label="Division" value={form.division_id} onChange={(v) => set("division_id", v)} options={idOpts(options.divisions)} placeholder="None" />
         <SelectInput name="campaign_id" label="Campaign" value={form.campaign_id} onChange={(v) => set("campaign_id", v)} options={idOpts(options.campaigns)} placeholder="None" />
         <EmploymentStatusField form={form} set={set} options={options} detail={detail} />
-        <SelectInput name="duty_type" label="Duty type" value={form.duty_type} onChange={(v) => set("duty_type", v)} options={opts(options.duty_types)} />
+        <SelectInput
+          name="duty_type_id"
+          label="Duty type"
+          value={form.duty_type_id}
+          onChange={(v) => set("duty_type_id", v)}
+          options={options.duty_types.map((t) => ({ value: String(t.id), label: t.name, tag: t.is_contractual ? "Contractual" : undefined }))}
+          footer={
+            options.duty_types.find((t) => String(t.id) === form.duty_type_id)?.is_contractual ? (
+              <p className="flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><ScrollText className="h-3 w-3" /> Contractual</p>
+            ) : null
+          }
+        />
         <SelectInput name="shift_id" label="Shift" value={form.shift_id} onChange={(v) => set("shift_id", v)} options={options.shifts.map((s) => ({ value: String(s.id), label: shiftLabel(s) }))} placeholder="No shift" />
         <SelectInput name="location_id" label="Location" value={form.location_id} onChange={(v) => set("location_id", v)} options={idOpts(options.locations)} placeholder="Not set" />
         <TextInput name="machine_uid" label="Machine UID" value={form.machine_uid} onChange={(v) => set("machine_uid", v)} maxLength={50} hint="Attendance device ID" placeholder="e.g. 2400" />

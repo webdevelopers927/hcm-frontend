@@ -5,7 +5,7 @@ import { ArrowRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRigh
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { EmployeeAvatar, ConfirmDialog, ErrorState, Skeleton, useEmployeeFilters } from "@/components/employees/api-ui";
+import { EmployeeAvatar, ConfirmDialog, ErrorState, Skeleton, useEmployeeFilters, useSlow } from "@/components/employees/api-ui";
 import { DataTable, Drawer, FormSection, ModuleHeader, SearchBox, StatStrip, TableFooter, Toolbar, type Column } from "@/components/employees/module-kit";
 import { useSession } from "@/components/session/session-provider";
 import { Badge, Button, Card, Field, Input, ProgressBar } from "@/components/ui/primitives";
@@ -79,6 +79,7 @@ export function View() {
   const list = useQuery({ queryKey: offboardingKeys.list(query), queryFn: ({ signal }) => listOffboardings(query, signal), placeholderData: keepPreviousData });
   const summary = list.data?.summary;
   const cases = useMemo(() => list.data?.data ?? [], [list.data]);
+  const stale = useSlow(list.isPlaceholderData);
 
   const caseId = Number(sp.get("case")) || null;
   const openCase = (id: number | null) => {
@@ -161,7 +162,7 @@ export function View() {
                     <span className="tabular rounded-md bg-surface px-1.5 text-[12px] font-semibold text-ink-2">{summary?.by_stage[stage.value] ?? "·"}</span>
                   </div>
                   <div className="space-y-2">
-                    {list.isPending
+                    {list.isPending || stale
                       ? Array.from({ length: 2 }, (_, i) => <Skeleton key={i} className="h-[118px] rounded-2xl" />)
                       : items.map((c) => (
                           <button key={c.id} onClick={() => openCase(c.id)} className="block w-full text-left">
@@ -181,16 +182,14 @@ export function View() {
                             </Card>
                           </button>
                         ))}
-                    {!list.isPending && items.length === 0 && <div className="rounded-xl border border-dashed border-line-strong p-4 text-center text-[12px] text-ink-3">No one here</div>}
+                    {!list.isPending && !stale && items.length === 0 && <div className="rounded-xl border border-dashed border-line-strong p-4 text-center text-[12px] text-ink-3">No one here</div>}
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
-      ) : list.isPending ? (
-        <Card className="divide-y divide-line">{Array.from({ length: 5 }, (_, i) => <div key={i} className="flex items-center gap-3 p-4"><Skeleton className="h-10 w-10 rounded-full" /><Skeleton className="h-4 w-48" /></div>)}</Card>
-      ) : rows.length === 0 ? (
+      ) : !list.isPending && !stale && rows.length === 0 ? (
         <Card className="px-6 py-14 text-center">
           <h3 className="text-sm font-semibold text-ink">{search ? "No results" : "No one is being off-boarded"}</h3>
           <p className="mt-1 text-[13px] text-ink-3">{search ? `Nobody matches “${search}”.` : "Open and recently completed cases show up here."}</p>
@@ -200,6 +199,7 @@ export function View() {
         <DataTable
           rows={rows}
           columns={columns}
+          loading={list.isPending || stale}
           onRowClick={(r) => openCase(Number(r.id))}
           footer={
             list.data && (
@@ -245,7 +245,6 @@ const PLACEHOLDER_STAGES: { value: OffboardingStage; label: string }[] = [
   { value: "resigned", label: "Resigned" },
   { value: "notice_period", label: "Notice period" },
   { value: "clearance", label: "Clearance" },
-  { value: "exit_interview", label: "Exit interview" },
   { value: "completed", label: "Completed" },
 ];
 
@@ -415,11 +414,41 @@ function Checklist({ c, editable, onCase }: { c: OffboardingCase; editable: bool
   const [label, setLabel] = useState("");
   const [owner, setOwner] = useState("");
   const [adding, setAdding] = useState(false);
+  const qc = useQueryClient();
   const run = useMutation({
     mutationFn: (fn: () => Promise<OffboardingCase>) => fn(),
     onSuccess: onCase,
     onError: (e) => toast(errorMessage(e), "bad"),
   });
+
+  // Ticking is optimistic: the box flips at once, the server catches up, and a failure rolls it back.
+  const detailKey = offboardingKeys.detail(c.id);
+  const toggleKey = ["offboardings", "checklist-toggle", c.id];
+  const toggle = useMutation({
+    mutationKey: toggleKey,
+    mutationFn: ({ itemId, done }: { itemId: number; done: boolean }) => updateChecklistItem(c.id, itemId, { done }),
+    onMutate: async ({ itemId, done }) => {
+      await qc.cancelQueries({ queryKey: detailKey });
+      const previous = qc.getQueryData<OffboardingCase>(detailKey);
+      qc.setQueryData<OffboardingCase>(detailKey, (old) => {
+        if (!old?.checklist) return old;
+        const checklist = old.checklist.map((i) => (i.id === itemId ? { ...i, done, done_at: done ? new Date().toISOString() : null, done_by: done ? i.done_by : null } : i));
+        return { ...old, checklist, checklist_progress: { done: checklist.filter((i) => i.done).length, total: checklist.length } };
+      });
+      return { previous };
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(detailKey, ctx.previous);
+      // Re-sync with the server in case other toggles in the burst succeeded.
+      void qc.invalidateQueries({ queryKey: detailKey });
+      toast(errorMessage(e), "bad");
+    },
+    onSuccess: (fresh) => {
+      // Only the last toggle in a burst writes the server's copy, so earlier replies can't undo later clicks.
+      if (qc.isMutating({ mutationKey: toggleKey }) === 1) onCase(fresh);
+    },
+  });
+
   const items = c.checklist ?? [];
   return (
     <FormSection title={`Exit checklist · ${c.checklist_progress.done}/${c.checklist_progress.total}`} action={editable && !adding ? <Button size="sm" variant="ghost" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> Add item</Button> : undefined}>
@@ -428,9 +457,9 @@ function Checklist({ c, editable, onCase }: { c: OffboardingCase; editable: bool
           <li key={item.id} className="group flex items-center gap-2">
             <button
               type="button"
-              disabled={!editable || run.isPending}
+              disabled={!editable}
               aria-pressed={item.done}
-              onClick={() => run.mutate(() => updateChecklistItem(c.id, item.id, { done: !item.done }))}
+              onClick={() => toggle.mutate({ itemId: item.id, done: !item.done })}
               className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-xl border p-3 text-left transition disabled:cursor-default", item.done ? "border-transparent bg-ok-soft" : "border-line hover:border-line-strong")}
             >
               <span className={cn("inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", item.done ? "border-ok bg-ok text-white" : "border-line-strong")}>

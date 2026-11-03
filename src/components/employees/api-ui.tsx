@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, RotateCw } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Avatar, Badge, Button, Card } from "@/components/ui/primitives";
 import { errorMessage } from "@/lib/api/client";
 import { employmentStatusTone, hueFor, workModeLabel } from "@/lib/api/display";
@@ -62,7 +62,24 @@ export function ErrorState({ error, onRetry, title = "Couldn't load this" }: { e
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <span aria-hidden className={cn("block animate-pulse rounded-md bg-surface-3", className)} />;
+  return <span aria-hidden className={cn("shimmer block rounded-md", className)} />;
+}
+
+/**
+ * True once `busy` has lasted `delay` ms. Swapping rows for skeletons on a
+ * fast response just flickers; this only shows them when the wait is felt.
+ */
+export function useSlow(busy: boolean, delay = 150) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!busy) return;
+    const t = setTimeout(() => setSlow(true), delay);
+    return () => {
+      clearTimeout(t);
+      setSlow(false);
+    };
+  }, [busy, delay]);
+  return busy && slow;
 }
 
 /** Keyboard-accessible confirm dialog (Esc cancels, focus starts on Cancel). */

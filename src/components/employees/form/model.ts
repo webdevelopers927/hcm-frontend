@@ -39,7 +39,7 @@ const STR_KEYS = [
   "salutation", "first_name", "middle_name", "last_name", "pseudo_name", "father_husband_name", "gender", "birth_date",
   "cnic", "cnic_expiry", "personal_email", "marital_status", "religion", "blood_group",
   // positional
-  "division_id", "email", "department_id", "designation_id", "employment_status_id", "shift_id", "duty_type", "work_mode", "campaign_id",
+  "division_id", "email", "department_id", "designation_id", "employment_status_id", "shift_id", "duty_type_id", "work_mode", "campaign_id",
   "location_id", "machine_uid", "probation_start_date", "probation_duration_id", "confirmation_date", "join_date",
   "separation_date", "resigned_date", "last_working_day", "reason_for_resignation", "remote_access_from", "remote_access_until",
   // contact
@@ -50,7 +50,7 @@ const STR_KEYS = [
 ] as const;
 export type StrKey = (typeof STR_KEYS)[number];
 
-const ID_KEYS = new Set<StrKey>(["division_id", "department_id", "designation_id", "employment_status_id", "shift_id", "campaign_id", "location_id", "probation_duration_id"]);
+const ID_KEYS = new Set<StrKey>(["division_id", "department_id", "designation_id", "employment_status_id", "shift_id", "duty_type_id", "campaign_id", "location_id", "probation_duration_id"]);
 /** National ids: the form only ever holds a *new* value; blank keeps what's stored. */
 export const SECRET_KEYS = ["cnic", "passport_no", "driving_license_no"] as const;
 export type SecretKey = (typeof SECRET_KEYS)[number];
@@ -114,7 +114,7 @@ export type FormKey = keyof FormState;
 export const SECTION_KEYS: Record<SectionId, FormKey[]> = {
   personal: ["avatar", "salutation", "first_name", "middle_name", "last_name", "pseudo_name", "father_husband_name", "gender", "birth_date", "cnic", "cnic_expiry", "personal_email", "country", "state", "city", "nationality", "marital_status", "religion", "blood_group"],
   positional: [
-    "division_id", "email", "department_id", "designation_id", "employment_status_id", "shift_id", "duty_type", "work_mode", "campaign_id", "location_id",
+    "division_id", "email", "department_id", "designation_id", "employment_status_id", "shift_id", "duty_type_id", "work_mode", "campaign_id", "location_id",
     "machine_uid", "probation_start_date", "probation_duration_id", "confirmation_date", "join_date", "separation_date", "resigned_date", "last_working_day", "reason_for_resignation", "reports_to",
     "indirect_reports_to", "has_team_authority", "remote_access", "permanent_remote_access", "remote_access_from", "remote_access_until",
   ],
@@ -333,7 +333,7 @@ const TOP_LABELS: Record<string, string> = {
   cnic_expiry: "CNIC expiry", personal_email: "Personal email", country_id: "Country", state_id: "State / province", city_id: "City",
   nationality_id: "Nationality", marital_status: "Marital status", religion: "Religion", blood_group: "Blood group",
   division_id: "Division", email: "Business email", department_id: "Department", designation_id: "Designation", employment_status_id: "Employment status",
-  shift_id: "Shift", duty_type: "Duty type", work_mode: "Work mode", campaign_id: "Campaign", location_id: "Location", machine_uid: "Machine UID",
+  shift_id: "Shift", duty_type_id: "Duty type", work_mode: "Work mode", campaign_id: "Campaign", location_id: "Location", machine_uid: "Machine UID",
   probation_start_date: "Probation start", probation_duration_id: "Probation duration", confirmation_date: "Confirmation date",
   join_date: "Date of joining", separation_date: "Separation date", resigned_date: "Resigned date", last_working_day: "Last working day", reason_for_resignation: "Reason for resignation", reports_to_id: "Reporting authority",
   indirect_reports_to_id: "Indirect reporting authority", has_team_authority: "Team authority", remote_access: "Remote access",
@@ -387,7 +387,7 @@ export const fieldId = (key: string) => `ef-${key.replace(/\./g, "-")}`;
 
 /* ---------- completeness ---------- */
 
-export const REQUIRED = new Set(["first_name", "last_name", "email", "cnic", "department_id", "designation_id", "employment_status_id", "duty_type", "join_date"]);
+export const REQUIRED = new Set(["first_name", "last_name", "email", "cnic", "department_id", "designation_id", "employment_status_id", "duty_type_id", "join_date"]);
 
 const EXP_REQUIRED: (keyof ExpRow | "country_id" | "state_id" | "city_id" | "experience_letter")[] = [
   "company_name", "designation", "last_salary", "country_id", "state_id", "city_id", "period_from", "period_to",

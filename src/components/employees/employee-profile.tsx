@@ -32,11 +32,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@/components/session/session-provider";
-import { Button, Card, CardHeader } from "@/components/ui/primitives";
+import { Badge, Button, Card, CardHeader } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/toast";
 import { ApiError, errorMessage } from "@/lib/api/client";
 import { CNIC_MASK, hueFor, shiftLabel } from "@/lib/api/display";
 import {
+  contractKeys,
   deleteEmployee,
   downloadPrivateFile,
   employeeKeys,
@@ -45,6 +46,7 @@ import {
   getEmployeeDetail,
   getEmployeeSensitive,
   getFormOptions,
+  listContracts,
   resetTwoFactor,
   unbindDevice,
 } from "@/lib/api/employees";
@@ -277,7 +279,20 @@ function Overview({ e, full }: { e: Profile; full: Full }) {
   );
 }
 
+const contractTone = { active: "ok", expiring: "warn", expired: "bad", upcoming: "info", renewed: "neutral" } as const;
+
 function Job({ e, full }: { e: Profile; full: Full }) {
+  // Only contractual staff have contracts; an error (e.g. no access) just hides the row.
+  const contractual = !!full?.d.duty_type?.is_contractual;
+  // This list includes renewed contracts, soonest end first, so the first one not renewed is the current one.
+  const contractQuery = { employee_id: e.id, per_page: 20 };
+  const contract = useQuery({
+    queryKey: contractKeys.list(contractQuery),
+    queryFn: ({ signal }) => listContracts(contractQuery, signal),
+    enabled: contractual,
+    retry: false,
+  });
+  const current = contract.data?.data.find((c) => c.status !== "renewed");
   const rows: [string, ReactNode][] = [
     ["Employee code", e.code],
     ["Machine UID", e.machine_uid ?? "—"],
@@ -299,7 +314,34 @@ function Job({ e, full }: { e: Profile; full: Full }) {
     const probation = d.probation_duration_id ? o.probation_durations.find((p) => p.id === d.probation_duration_id)?.name ?? null : null;
     rows.push(
       ["Division", d.division_id ? o.divisions.find((x) => x.id === d.division_id)?.name ?? "—" : "—"],
-      ["Duty type", label(o.duty_types, d.duty_type)],
+      [
+        "Duty type",
+        d.duty_type ? (
+          <span key="dt" className="inline-flex items-center gap-2">
+            {d.duty_type.name}
+            {d.duty_type.is_contractual && <Badge tone="neutral">Contractual</Badge>}
+          </span>
+        ) : (
+          "—"
+        ),
+      ],
+      ...(contractual && !contract.isError
+        ? ([
+            [
+              "Contract",
+              contract.isPending ? (
+                <Skeleton key="ct" className="h-4 w-40" />
+              ) : current ? (
+                <Link key="ct" href={`/employees/contracts?contract=${current.id}`} className="inline-flex flex-wrap items-center gap-2 hover:underline">
+                  <span className="tabular">{date(current.start_date)} – {date(current.end_date)}</span>
+                  <Badge tone={contractTone[current.status]}>{current.status.charAt(0).toUpperCase() + current.status.slice(1)}</Badge>
+                </Link>
+              ) : (
+                "No contract on record"
+              ),
+            ],
+          ] as [string, ReactNode][])
+        : []),
       ["Team authority", d.has_team_authority ? "Yes" : "No"],
       ["Probation", d.probation_start_date ? `${date(d.probation_start_date)}${probation ? ` · ${probation}` : ""}` : "—"],
       ["Probation ends", date(d.probation_end_date)],

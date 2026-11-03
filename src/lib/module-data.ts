@@ -77,24 +77,6 @@ export const credentials: Credential[] = employees.map((e, i) => {
   };
 });
 
-/* ---------- Contracts ---------- */
-export type Contract = {
-  id: string;
-  employee: Employee;
-  kind: "Permanent" | "Fixed-term" | "Consultant" | "Internship";
-  start: string;
-  end: string | null;
-  hasLeaves: boolean;
-  status: "Active" | "Expiring" | "Expired" | "Draft";
-  signed: boolean;
-};
-export const contracts: Contract[] = employees.slice(0, 36).map((e, i) => {
-  const kind = (["Permanent", "Fixed-term", "Fixed-term", "Consultant", "Permanent", "Internship"] as const)[i % 6]!;
-  const end = kind === "Permanent" ? null : i % 5 === 1 ? day(11, 12 + (i % 15)) : i % 7 === 3 ? day(9, 30) : day(6, 30, 2027);
-  const status: Contract["status"] = !end ? "Active" : end < "2026-11-01" ? "Expired" : end < "2026-12-01" ? "Expiring" : i % 11 === 0 ? "Draft" : "Active";
-  return { id: `CT-${900 + i}`, employee: e, kind, start: e.joinDate, end, hasLeaves: kind !== "Consultant", status, signed: status !== "Draft" };
-});
-
 /* ---------- Promotions ---------- */
 export type Promotion = {
   id: string;
